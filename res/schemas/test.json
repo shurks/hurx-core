@@ -1,0 +1,317 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$ref": "#/definitions/HurxConfig",
+    "definitions": {
+        "HurxConfig": {
+            "type": "object",
+            "properties": {
+                "$schema": {
+                    "type": "string",
+                    "description": "Path to the hurx schema json"
+                },
+                "package": {
+                    "$ref": "#/definitions/HurxConfigPackage",
+                    "description": "All package configurations"
+                }
+            },
+            "required": [
+                "$schema",
+                "package"
+            ],
+            "additionalProperties": false,
+            "description": "The hurx.json config file format"
+        },
+        "HurxConfigPackage": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name of the package"
+                },
+                "version": {
+                    "type": "string",
+                    "description": "The version of the package"
+                },
+                "built": {
+                    "type": "boolean",
+                    "description": "Whether the package is built or not"
+                },
+                "dependencies": {
+                    "$ref": "#/definitions/HurxConfigDependencies",
+                    "description": "Dependencies for the hurx project"
+                },
+                "devDependencies": {
+                    "$ref": "#/definitions/HurxConfigDependencies",
+                    "description": "Dev dependencies for the hurx project"
+                },
+                "env": {
+                    "$ref": "#/definitions/HurxConfigEnvironments",
+                    "description": "The environments for the project"
+                },
+                "apps": {
+                    "$ref": "#/definitions/HurxConfigApps",
+                    "description": "All distributed apps within the project"
+                }
+            },
+            "required": [
+                "name",
+                "version",
+                "env",
+                "apps"
+            ],
+            "additionalProperties": false,
+            "description": "A package in the hurx json file"
+        },
+        "HurxConfigDependencies": {
+            "type": "object",
+            "additionalProperties": {
+                "$ref": "#/definitions/HurxDependency"
+            },
+            "description": "The hurx.json package dependencies"
+        },
+        "HurxDependency": {
+            "type": "string",
+            "description": "A dependency in hurx.json"
+        },
+        "HurxConfigEnvironments": {
+            "type": "object",
+            "additionalProperties": {
+                "$ref": "#/definitions/DeepPartial%3CHurxConfigEnvironment%3E"
+            },
+            "properties": {
+                "default": {
+                    "$ref": "#/definitions/HurxConfigEnvironment",
+                    "description": "The default environment, of which every property can be overriden by other environments"
+                },
+                "npm": {
+                    "type": "string",
+                    "description": "The NODE_ENV value for npm"
+                },
+                "git": {
+                    "type": "string",
+                    "description": "The NODE_ENV value for git"
+                }
+            },
+            "required": [
+                "default",
+                "git",
+                "npm"
+            ],
+            "description": "The environments in hurx.json `package.env`"
+        },
+        "HurxConfigEnvironment": {
+            "type": "object",
+            "additionalProperties": {
+                "type": [
+                    "string",
+                    "object"
+                ]
+            },
+            "properties": {
+                "paths": {
+                    "$ref": "#/definitions/HurxPaths",
+                    "description": "All application paths"
+                }
+            },
+            "required": [
+                "paths"
+            ],
+            "description": "An environment in the hurx config file"
+        },
+        "HurxPaths": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "string"
+            },
+            "properties": {
+                "base": {
+                    "type": "string",
+                    "description": "The base path for the project (root)"
+                },
+                "sources": {
+                    "type": "string",
+                    "description": "The sources path"
+                },
+                "resources": {
+                    "type": "string",
+                    "description": "The resources path"
+                },
+                "logs": {
+                    "type": "string",
+                    "description": "The logs path"
+                },
+                "output": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "description": "The output paths"
+                }
+            },
+            "required": [
+                "base",
+                "output",
+                "sources"
+            ]
+        },
+        "DeepPartial<HurxConfigEnvironment>": {
+            "type": "object",
+            "properties": {
+                "paths": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            },
+                            "properties": {
+                                "base": {
+                                    "type": "string",
+                                    "description": "The base path for the project (root)"
+                                },
+                                "sources": {
+                                    "type": "string",
+                                    "description": "The sources path"
+                                },
+                                "resources": {
+                                    "type": "string",
+                                    "description": "The resources path"
+                                },
+                                "logs": {
+                                    "type": "string",
+                                    "description": "The logs path"
+                                },
+                                "output": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "description": "The output paths"
+                                }
+                            },
+                            "required": [
+                                "base",
+                                "output",
+                                "sources"
+                            ]
+                        }
+                    ],
+                    "description": "All application paths"
+                }
+            },
+            "additionalProperties": false
+        },
+        "HurxConfigApps": {
+            "type": "object",
+            "properties": {
+                "bin": {
+                    "$ref": "#/definitions/HurxConfigBinApps",
+                    "description": "Binary projects"
+                }
+            },
+            "additionalProperties": false,
+            "description": "All the hurx apps within the project"
+        },
+        "HurxConfigBinApps": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "object",
+                "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "default": {
+                            "$ref": "#/definitions/HurxConfigBinApp",
+                            "description": "The default configuration for the bin app"
+                        },
+                        "args": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "The app arguments"
+                        },
+                        "paths": {
+                            "$ref": "#/definitions/DeepPartial%3Cdef-alias-1422233886-108-215-1422233886-0-215%3Cdef-alias-1692912231-1995-2407-1692912231-0-3102%3E2029580990%3E"
+                        },
+                        "main": {
+                            "type": "string",
+                            "description": "The main entry point"
+                        }
+                    },
+                    "required": [
+                        "default"
+                    ]
+                }
+            },
+            "description": "All binary apps"
+        },
+        "HurxConfigBinApp": {
+            "type": "object",
+            "properties": {
+                "args": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "The app arguments"
+                },
+                "paths": {
+                    "$ref": "#/definitions/DeepPartial%3CHurxPaths%3E",
+                    "description": "Path overrides for the app"
+                },
+                "main": {
+                    "type": "string",
+                    "description": "The main entry point"
+                }
+            },
+            "required": [
+                "paths",
+                "main"
+            ],
+            "additionalProperties": false,
+            "description": "A binary application environment"
+        },
+        "DeepPartial<HurxPaths>": {
+            "type": "object",
+            "properties": {
+                "base": {
+                    "type": "string"
+                },
+                "sources": {
+                    "type": "string"
+                },
+                "resources": {
+                    "type": "string"
+                },
+                "logs": {
+                    "type": "string"
+                },
+                "output": {
+                    "type": "string"
+                }
+            },
+            "additionalProperties": false
+        },
+        "DeepPartial<def-alias-1422233886-108-215-1422233886-0-215<def-alias-1692912231-1995-2407-1692912231-0-3102>2029580990>": {
+            "type": "object",
+            "properties": {
+                "base": {
+                    "type": "string"
+                },
+                "sources": {
+                    "type": "string"
+                },
+                "resources": {
+                    "type": "string"
+                },
+                "logs": {
+                    "type": "string"
+                },
+                "output": {
+                    "type": "string"
+                }
+            },
+            "additionalProperties": false
+        }
+    }
+}

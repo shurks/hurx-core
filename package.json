@@ -1,0 +1,48 @@
+{
+    "name": "@hurx/core",
+    "displayName": "Hurx core",
+    "description": "The core for the Hurx framework.",
+    "version": "1.0.1",
+    "main": "./dist/index.js",
+    "dependencies": {
+        "blessed": "^0.1.81",
+        "chalk": "4.0.0",
+        "enquirer": "^2.4.1",
+        "inquirer": "^8.0.0",
+        "keypress": "^0.2.1",
+        "linereader": "^1.1.0",
+        "object-path": "^0.11.8",
+        "prompt-question": "^5.0.2",
+        "ts-json-schema-generator": "^1.3.0",
+        "tty": "^1.0.1"
+    },
+    "devDependencies": {
+        "@types/blessed": "^0.1.22",
+        "@types/keypress": "^2.0.30",
+        "@types/node": "^20.4.5",
+        "@types/object-path": "^0.11.1",
+        "@types/typescript": "^2.0.0",
+        "ts-node": "^10.9.1",
+        "typescript": "^5.1.6"
+    },
+    "scripts": {
+        "compile": "npx tsc",
+        "start": "npx ts-node ./src",
+        "build": "npx ts-node ./src/build"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/shurks/hurx-library.git"
+    },
+    "keywords": [
+        "hurx",
+        "language",
+        "programming language",
+        "hurx language"
+    ],
+    "author": "Stan Hurks",
+    "license": "MIT",
+    "bin": {
+        "hurx": "./dist/bin/hurx/index.js"
+    }
+}

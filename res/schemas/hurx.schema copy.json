@@ -1,0 +1,275 @@
+{
+    "$schema": "http://json-schema.org/schema",
+    "allOf": [
+        {
+            "$ref": "#/definitions/root"
+        }
+    ],
+    "definitions": {
+        "root": {
+            "type": "object",
+            "properties": {
+                "$schema": {
+                    "type": "string",
+                    "description": "The Hurx json-schema"
+                },
+                "package": {
+                    "$ref": "#/definitions/package"
+                }
+            },
+            "required": [
+                "$schema",
+                "package"
+            ],
+            "definitions": {
+                "environments": {
+                    "description": "All the development environments with specific options.",
+                    "patternProperties": {
+                        "development": {
+                            "description": "The development environment, which is the default environment and will be inherited by the other environments"
+                        },
+                        "production": {
+                            "description": "The production environment, which will inherit everything from development.\nAll values will be overriden with the overrides specified here."
+                        },
+                        "^(?!(production|development)$).*": {
+                            "description": "A custom environment, which only has to contain overrides for the options.\nInherits from development"
+                        }
+                    }
+                }
+            }
+        },
+        "package": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "The name of your package, which is the `name` property in package.json",
+                    "type": "string",
+                    "pattern": "([a-zA-Z0-9-]+(\/[a-zA-Z0-9-]{0,1}))"
+                },
+                "version": {
+                    "type": "string",
+                    "description": "The version of your npm/yarn package",
+                    "pattern": "^([0-9]+\\.){2}[0-9]+$"
+                },
+                "dependencies": {
+                    "description": "The dependencies of your package",
+                    "type": "object",
+                    "patternProperties": {
+                        ".*": {
+                            "oneOf": [
+                                {
+                                    "description": "The version of this dependency",
+                                    "type": "string",
+                                    "pattern": "^([0-9]+\\.){2}[0-9]+(\\:(?!\\.(\\\\|\\/))([^\\\\\\/]+(\\\\|\\/))*[^\\\\\\/]+)?$"
+                                },
+                                {
+                                    "description": "The version of this dependency (stored in package.json#devDependencies)",
+                                    "type": "string",
+                                    "pattern": "^([0-9]+\\.){2}[0-9]+#dev(\\:(?!\\.(\\\\|\\/))([^\\\\\\/]+(\\\\|\\/))*[^\\\\\\/]+)?$"
+                                },
+                                {
+                                    "description": "The version of this dependency\n\nNote: `^` Offers compatibilty of major and minor part\nE.g.: version ^0.1.1 can range from 0.1.1 until anything less than 0.2.0",
+                                    "type": "string",
+                                    "pattern": "^\\^([0-9]+\\.){2}[0-9]+(\\:(?!\\.(\\\\|\\/))([^\\\\\\/]+(\\\\|\\/))*[^\\\\\\/]+)?$"
+                                },
+                                {
+                                    "description": "The version of this dependency (stored in package.json#devDependencies)\n\nNote: `^` Offers compatibilty of major and minor part\nE.g.: version ^0.1.1 can range from 0.1.1 until anything less than 0.2.0",
+                                    "type": "string",
+                                    "pattern": "^\\^([0-9]+\\.){2}[0-9]+#dev(\\:(?!\\.(\\\\|\\/))([^\\\\\\/]+(\\\\|\\/))*[^\\\\\\/]+)?$"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "contributes": {
+                    "type": "object",
+                    "description": "All contributions represented by this package.",
+                    "properties": {
+                        "bin": {
+                            "type": "object",
+                            "description": "Your packages binary programs or command line interfaces (CLI), mapped by their keyword",
+                            "patternProperties": {
+                                ".*": {
+                                    "type": "object",
+                                    "properties": {
+                                        "env": {
+                                            "type": "object",
+                                            "patternProperties": {
+                                                "default": {
+                                                    "description": "Binary program environment's defaults"
+                                                },
+                                                "^(?!default$).*": {
+                                                    "description": "Binary program settings for a custom environment"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "additionalProperties": false
+                }
+            },
+            "required": [
+                "name",
+                "version"
+            ],
+            "additionalProperties": false
+        },
+        "programs": {
+            "type": "object",
+            "patternProperties": {
+                ".*": {
+                    "$ref": "#/definitions/program"
+                }
+            }
+        },
+        "program": {
+            "type": "object",
+            "description": "A program of one or more contexts, that can be run by the @hurx/core library.",
+            "properties": {
+                "context": {
+                    "type": "object",
+                    "description": "A context of a certain type, that can be run by the @hurx/core library.",
+                    "properties": {
+                        "cli": {
+                            "$ref": "#/definitions/program/definitions/cli"
+                        }
+                    },
+                    "minProperties": 1,
+                    "maxProperties": 1,
+                    "additionalProperties": false
+                },
+                "input": {
+                    "type": "object",
+                    "description": "The input sources to monitor while running this program.",
+                    "properties": {
+                        "watch": {
+                            "type": "array",
+                            "description": "Files to watch while running the program",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "hide": {
+                            "type": "array",
+                            "description": "Files to hide in the explorer while running the program",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "ignore": {
+                            "type": "array",
+                            "description": "Files to generate the .gitignore file with for this program",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "output": {
+                    "type": "array",
+                    "description": "The output sources to generate while running this program."
+                }
+            },
+            "additionalProperties": false,
+            "required": [
+                "context",
+                "input"
+            ],
+            "definitions": {
+                "cli": {
+                    "type": "object",
+                    "description": "A program that can be called by this property name in the terminal, after installing the package globally.",
+                    "properties": {
+                        "run": {
+                            "type": "string",
+                            "description": "The entry point of the program, containing a default export"
+                        },
+                        "commands": {
+                            "$ref": "#/definitions/program/definitions/cli/definitions/commands",
+                            "description": "The commands that can be used by the cli e.g.: `program command123`"
+                        },
+                        "flags": {
+                            "$ref": "#/definitions/program/definitions/cli/definitions/flags",
+                            "description": "The flags that can be used everywhere by the cli e.g.: `program --flag1 --flag2 \"some value\"`"
+                        },
+                        "hooks": {
+                            "$ref": "#/definitions/program/definitions/cli/definitions/hooks",
+                            "description": "Lifecycle hooks that will be executed at a certain time relative to using the current command."
+                        }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                        "run",
+                        "commands"
+                    ],
+                    "definitions": {
+                        "commands": {
+                            "type": "object",
+                            "patternProperties": {
+                                ".*": {
+                                    "$ref": "#/definitions/program/definitions/cli/definitions/command",
+                                    "description": "A command that is runnable by entering its keywords, starting from the root, in the terminal."
+                                }
+                            }
+                        },
+                        "command": {
+                            "type": "object",
+                            "properties": {
+                                "run": {
+                                    "description": "The file containing a default export that will be run",
+                                    "type": "string"
+                                },
+                                "commands": {
+                                    "$ref": "#/definitions/program/definitions/cli/definitions/commands"
+                                },
+                                "flags": {
+                                    "$ref": "#/definitions/program/definitions/cli/definitions/flags"
+                                },
+                                "hooks": {
+                                    "description": "Lifecycle hooks at which code is executed.",
+                                    "$ref": "#/definitions/program/definitions/cli/definitions/hooks"
+                                }
+                            },
+                            "additionalProperties": false
+                        },
+                        "flags": {
+                            "type": "object",
+                            "description": "Runs specific code when certain --flag's are present, instead of the \"run\" command",
+                            "patternProperties": {
+                                ".*": {
+                                    "$ref": "#/definitions/program/definitions/cli/definitions/command",
+                                    "description": "A flag that can be applied to the parent command, runnable by entering its keywords followed by --[flag name]."
+                                }
+                            }
+                        },
+                        "hooks": {
+                            "type": "object",
+                            "patternProperties": {
+                                "before": {
+                                    "description": "File paths (without extension), containing a default export of a command that will be executed before running the command.",
+                                    "$ref": "#/definitions/program/definitions/cli/definitions/hooks/definitions/hooks"
+                                },
+                                "after": {
+                                    "description": "File paths (without extension), containing a default export of a command that will be executed after running the command.",
+                                    "$ref": "#/definitions/program/definitions/cli/definitions/hooks/definitions/hooks"
+                                }
+                            },
+                            "additionalProperties": false,
+                            "definitions": {
+                                "hooks": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

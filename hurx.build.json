@@ -1,0 +1,83 @@
+{
+    "package": {
+        "name": "@hurx/core",
+        "version": "1.0.0",
+        "built": true,
+        "dependencies": {
+            "@hurx/gitignore-deserializer": "^1.0.0"
+        },
+        "devDependencies": {
+        },
+        "env": {
+            "npm": "production",
+            "git": "default",
+            "default": {
+                "paths": {
+                    "base": "./",
+                    "sources": "",
+                    "resources": "res",
+                    "logs": "logs",
+                    "distribution": {
+                        "base": "dist",
+                        "sources": "",
+                        "resources": "res",
+                        "logs": "logs"
+                    }
+                }
+            },
+            "development": {},
+            "production": {
+                "paths": {
+                    "distribution": {
+                        "base": "dist/production"
+                    }
+                }
+            }
+        },
+        "apps": {
+            "bin": {
+                "hurx": {
+                    "env": {
+                        "default": {
+                            "args": [
+                                "--verbose"
+                            ],
+                            "paths": {
+                                "sources": "src/bin/hurx",
+                                "resources": "res/bin/hurx",
+                                "logs": "logs/bin/hurx",
+                                "distribution": {
+                                    "sources": "bin/hurx",
+                                    "resources": "res/bin/hurx",
+                                    "logs": "logs/bin/hurx"
+                                }
+                            }
+                        },
+                        "production": {
+                            "args": ["--test"]
+                        }
+                    },
+                    "main": "index#default.main"
+                }
+            },
+            "client": {
+                "ios": {},
+                "android": {},
+                "web": {
+                    "spa": {},
+                    "pwa": {}
+                }
+            },
+            "socket": {},
+            "server": {
+                "graphql": {},
+                "rest": {}
+            },
+            "vscode": {
+                "hurx": {
+                    
+                }
+            }
+        }
+    }
+}
