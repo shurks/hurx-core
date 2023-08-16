@@ -44,7 +44,7 @@ export interface PathsFilePath {
 export default class Env {
     public static logger = new Logger()
 
-    /**
+    /** 
      * Parse/merge the env from a hurx.json file
      * @param hurxJSONFile the hurx.json file object
      * @param root the path to the hurx json file
@@ -68,7 +68,7 @@ export default class Env {
         const json = JSON.parse(readFileSync(path.join(__dirname, '../../../../../res', 'schemas', 'hurx.schema.json')).toString('utf8'))
         const properties = Object.keys(json.definitions.HurxPaths.properties).filter((v) => json.definitions.HurxPaths.properties[v].type === 'string')
         const outputProperty: string = Object.keys(json.definitions.HurxPaths.properties).filter((v) => json.definitions.HurxPaths.properties[v].$ref?.endsWith('/HurxPathsBase'))[0]
-        const allProperties = [`paths`, `paths.${outputProperty}`].map((v) => properties.map((p) => `${v}.${p}`)).reduce((x, y) => [...x, ...y], [])
+        const allProperties = (hurxJSONFile.package.built ? [`paths`] : [`paths`, `paths.${outputProperty}`]).map((v) => properties.map((p) => `${v}.${p}`)).reduce((x, y) => [...x, ...y], [])
 
         // Validate that all paths are present and are relative
         const valid = /^(?!.*\/\/)([\w.-]+\/?)*$/
@@ -186,30 +186,17 @@ export default class Env {
             for (const _path of allProperties.map((v) => `${prefix || ''}${v}`)) {
                 if (/\.base$/.test(_path)) {
                     if (/\.output\.base$/.test(_path)) {
-                        objectPath(parsedEnv).set(_path, path.join(objectPath(parsedEnv).get(_path.replace(/\.output\.base$/, '.base')), objectPath(parsedEnv).get(_path)))
+                        objectPath(parsedEnv).set(_path, path.join(objectPath(parsedEnv).get(_path.replace(/\.output\.base$/, '.base')), objectPath(parsedEnv).get(_path)).replace(/\\/g, '/'))
                     }
                     else {
-                        objectPath(parsedEnv).set(_path, path.join(root, objectPath(parsedEnv).get(_path)))
+                        objectPath(parsedEnv).set(_path, path.join(root, objectPath(parsedEnv).get(_path)).replace(/\\/g, '/'))
                     }
                 }
                 else {
                     const base = objectPath(parsedEnv).get(_path.replace(/\.[a-z0-9$_][a-zA-Z0-9$_]*$/, '.base'))
-                    objectPath(parsedEnv).set(_path, path.join(base, objectPath(parsedEnv).get(_path)))
+                    objectPath(parsedEnv).set(_path, path.join(base, objectPath(parsedEnv).get(_path)).replace(/\\/g, '/'))
                 }
             }
-            // for (const _path of paths) {
-            //     let prefix = './'
-            //     if (!/(^|\.)paths\.(base|(output\.base))$/.test(_path)) {
-            //         prefix = objectPath(parsedEnv).get(prefixes[_path])
-            //         if (!prefix || typeof prefix !== 'string') {
-            //             this.logger.info(prefixes)
-            //             this.logger.error(`hurx.json: path "${_path}" doesn't have a prefix registered.`)
-            //             process.exit()
-            //         }
-            //         console.log(parsedEnv.apps.bin.hurx.paths)
-            //         // objectPath(parsedEnv).set(_path, path.join(i === 1 ? root : '', prefix, objectPath(parsedEnv).get(_path)))
-            //     }
-            // }
         }
         processPaths()
         if (parsedEnv.apps.bin) {
