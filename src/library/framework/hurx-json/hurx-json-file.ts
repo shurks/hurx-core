@@ -196,7 +196,7 @@ export type HurxPaths = Record<string, string> & HurxPathsBase & {
     /**
      * The output paths
      */
-    output: HurxPathsBase
+    output?: HurxPathsBase
 }
 
 export type HurxPathsPartial = Record<string, string> & HurxPathsBasePartial & {
@@ -261,10 +261,6 @@ export type HurxConfigBinApp = {
      * If this is true then the name of this bin application will be available as a command in `npx [name]`
      */
     npx?: boolean
-    /**
-     * File patterns to include
-     */
-    include: string[]
 } & HurxConfigEnvironmentBase
 
 /**
@@ -290,14 +286,4 @@ export type HurxConfigApps = {
      * Binary projects
      */
     bin: Record<string, HurxConfigBinAppEnvironment & HurxConfigBinApp>
-}
-
-/**
- * The hurx `process.env` variables
- */
-export interface HurxEnv extends HurxConfigEnvironment {
-    /**
-     * All the apps
-     */
-    apps: HurxConfigApps
 }

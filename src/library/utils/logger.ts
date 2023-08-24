@@ -30,6 +30,11 @@ export default class Logger {
     protected indentsPerLevel: number = 4
 
     /**
+     * The process.argv arguments used for this logger
+     */
+    public argv: string[] = process.argv
+
+    /**
      * Prints a message for the clients to see, except if the type
      * provided is verbose, debug or trace.
      * @param options the options
@@ -71,9 +76,9 @@ export default class Logger {
      */
     public error(...data: any[]): void {
         const convert = (d: any) => typeof d === 'string'
-            ? chalk.bgHex('#222222').hex(this.colors.error)(` Error `) + chalk.bgHex(this.colors.error).bold.hex('#222222')(` ${d} `)
+            ? chalk.hex('#222222').bgHex(this.colors.error)(` Error `) + chalk.hex('#DDDDDD')(` ${d} `)
             : d instanceof Error
-                ? chalk.bgHex('#222222').hex(this.colors.error)(` Error `) + chalk.bgHex(this.colors.error).bold.hex('#222222')(` ${d.message} `)
+                ? chalk.hex('#222222').bgHex(this.colors.error)(` Error `) + chalk.hex('#DDDDDD')(` ${d.message} `) + (d.stack ? chalk.hex(this.colors.error)(`\n${d.stack.split(/\n|\r\n|\r/).filter((v, i) => i > 0).join('\n')} `) : '')
                 : d
         this.perform({ type: 'error' }, ...data.map((v) => convert(v)))
     }
@@ -84,7 +89,7 @@ export default class Logger {
      */
     public info(...data: any[]): void {
         const convert = (d: any) => typeof d === 'string'
-            ? chalk.bgHex('#222222').hex(this.colors.info)(` Info `) + chalk.bgHex(this.colors.info).bold.hex('#222222')(` ${d} `)
+            ? chalk.bgHex('#222222').hex(this.colors.info)(` Info `) + chalk.bgHex(this.colors.info).hex('#DDDDDD').bold(` ${d} `)
             : d
         this.perform({ type: 'info' }, ...data.map((v) => convert(v)))
     }
@@ -145,7 +150,7 @@ export default class Logger {
             error: [] as string[],
             success: [] as string[]
         }[type]
-        if (flags.length && !process.argv.find((v) => flags.includes(v))) {
+        if (flags.length && !this.argv.find((v) => flags.includes(v))) {
             return
         }
         for (const d of data) {

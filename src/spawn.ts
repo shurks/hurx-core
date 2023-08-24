@@ -1,9 +1,9 @@
 import path from "path"
-import Engine from "./library/engine/engine"
+import Hurx from "./library/engine/hurx"
 import Logger from "./library/utils/logger"
 
 // The flags
-const command = Engine.parseCommands()[0]
+const command = Hurx.parseCommands()[0]
 
 // The export
 let exp: null | string = null

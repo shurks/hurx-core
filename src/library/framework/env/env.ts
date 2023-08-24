@@ -1,8 +1,8 @@
 import objectPath from "object-path"
-import { HurxConfig, HurxConfigApp, HurxConfigApps, HurxConfigAppsPartial, HurxConfigBinApp, HurxConfigBinAppEnvironment, HurxConfigEnvironment, HurxConfigEnvironments } from "../hurx-json-file"
+import { HurxConfig, HurxConfigApp, HurxConfigApps, HurxConfigEnvironment } from "../hurx-json/hurx-json-file"
 import path from "path"
 import { readFileSync } from "fs"
-import Logger from "../../../utils/logger"
+import Logger from "../../utils/logger"
 
 /**
  * A package.env.paths filepath containing an export name and function

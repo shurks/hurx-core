@@ -4,8 +4,8 @@ import fs from 'fs'
 import path from "path"
 import Logger from "./library/utils/logger"
 import Watcher from "./library/utils/watcher"
-import { HurxConfig, HurxConfigAppsPartial, HurxConfigEnvironmentBase, HurxPaths } from "./library/engine/hurx-json-file/hurx-json-file"
-import Env, { PathsFilePath } from "./library/engine/hurx-json-file/env/env"
+import { HurxConfig, HurxConfigAppsPartial, HurxConfigEnvironmentBase, HurxPaths } from "./library/engine/hurx-json/hurx-json-file"
+import Env, { PathsFilePath } from "./library/engine/env/env"
 
 const findRoot = (_path: string): string => {
     if (_path === path.parse(process.cwd()).root) {
@@ -206,7 +206,7 @@ else if (hurxType === 'hurx.json') {
     try {
         env = Env.parse(hurxJSON, hurxRoot)
         hurxSourceRoot = hurxJSON.package.built
-            ? path.join(hurxRoot, hurxJSON.package.env.default.paths.output.sources)
+            ? path.join(hurxRoot, hurxJSON.package.env.default.paths.sources)
             : path.join(hurxRoot, hurxJSON.package.env.default.paths.sources)
     }
     catch (err) {
@@ -231,9 +231,9 @@ else if (hurxType === 'hurx.json') {
             }
 
             hurxExecutable.source = path.join(env.paths.sources, hurxExecutable.path)
-            hurxExecutable.output = path.join(env.paths.output.sources, hurxExecutable.path)
+            hurxExecutable.output = path.join(env.paths.sources, hurxExecutable.path)
 
-            if (!hurxJSON.package.built && fs.existsSync(hurxExecutable.source)) {
+            if (!hurxJSON.package.built) {
                 hurxExecutable.path = hurxExecutable.source
                 hurxExecutable.extension = hurxExecutable.extension || (
                     fs.existsSync(path.join(hurxExecutable.path, `${hurxExecutable.fileName || 'index'}.hurx`))
@@ -249,7 +249,7 @@ else if (hurxType === 'hurx.json') {
                     process.exit()
                 }
             }
-            else if (fs.existsSync(hurxExecutable.output)) {
+            else {
                 hurxExecutable.path = hurxExecutable.output
                 hurxExecutable.extension = 'js'
                 if (fs.existsSync(path.join(hurxExecutable.path, `${hurxExecutable.fileName || 'index'}.${hurxExecutable.extension}`))) {
@@ -260,12 +260,6 @@ else if (hurxType === 'hurx.json') {
                     logger.error(`hurx.json: entry file \`${path.join(hurxExecutable.path, `${hurxExecutable.fileName || 'index'}.${hurxExecutable.extension}`)}\` not found`)
                     process.exit()
                 }
-            }
-            else {
-                logger.error(`hurx.json: both dist and source folders dont exist:`, {
-                    hurxExecutable
-                })
-                process.exit()
             }
         }
         else {
