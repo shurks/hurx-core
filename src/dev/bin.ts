@@ -2,61 +2,16 @@
 import child from "child_process"
 import fs from 'fs'
 import path from "path"
-import Logger from "./library/utils/logger"
-import Watcher from "./library/utils/watcher"
-import { HurxConfig, HurxConfigAppsPartial, HurxConfigEnvironmentBase, HurxPaths } from "./library/engine/hurx-json/hurx-json-file"
-import Env, { PathsFilePath } from "./library/engine/env/env"
+import Logger from "../library/utils/logger"
+import Watcher from "../library/utils/watcher"
+import { HurxConfig, HurxConfigAppsPartial, HurxConfigEnvironmentBase, HurxPaths } from "../library/framework/hurx-json/hurx-json-file"
+import Env, { PathsFilePath } from "../library/framework/env/env"
+import Hurx from "../library/framework/hurx"
 
-const findRoot = (_path: string): string => {
-    if (_path === path.parse(process.cwd()).root) {
-        return "null"
-    }
-    if (fs.existsSync(path.join(_path, 'package.json'))) {
-        return `"${_path}"`
-    }
-    else {
-        return findRoot(path.join(_path, '../'))
-    }
-}
-
-const findHurx = (_path: string): string|null => {
-    if (_path === path.parse(process.cwd()).root) {
-        return null
-    }
-    if (fs.existsSync(path.join(_path, "hurx.build.json"))) {
-        return path.join(_path, 'hurx.build.json')
-    }
-    else if (fs.existsSync(path.join(_path, "hurx.json"))) {
-        return path.join(_path, 'hurx.json')
-    }
-    else {
-        return findHurx(path.join(_path, '../'))
-    }
-}
-
-const findProject = (_path: string): string|null => {
-    if (_path === path.parse(process.cwd()).root) {
-        return null
-    }
-    if (fs.existsSync(path.join(_path, "hurx.json"))) {
-        return path.join(_path, 'hurx.json')
-    }
-    else if (fs.existsSync(path.join(_path, "package.json"))) {
-        const project = findProject(path.join(_path, '../'))
-        if (!project) {
-            return path.join(_path, 'package.json')
-        }
-        else {
-            return project
-        }
-    }
-    else {
-        return findProject(path.join(_path, '../'))
-    }
-}
+// Hurx.initialize()
 
 const logger = new Logger()
-const hurx = findHurx(process.argv[1])
+const hurx = Env.findFramework(process.argv[1])
 const hurxEntry = process.argv[1]
 const hurxRoot = hurx ? path.join(hurx, '../') : null
 const hurxType = hurx ? hurx.endsWith('hurx.json') ? 'hurx.json' : hurx.endsWith('package.json') ? 'package.json' : null : null
@@ -67,7 +22,7 @@ if (hurx === null) {
     process.exit()
 }
 
-const project = findProject(process.cwd())
+const project = Env.findProject(process.cwd())
 const projectRoot = project ? path.join(project, '../') : null
 const projectType = project ? project.endsWith('hurx.json') ? 'hurx.json' : project.endsWith('package.json') ? 'package.json' : null : null
 if (!hurxRoot) {
@@ -96,6 +51,8 @@ const flags = [
     process.argv.filter((v, i) => i > 1).map((v) => `"${v}"`).join(' ')
 ].join(' ')
 
+logger.info(flags)
+
 const subscriptions = [
     Watcher.created.subscribe((path) => {
         if (path.includes(projectRoot)) {
@@ -123,7 +80,7 @@ const startChildProcess = () => {
     }
     isRestarting = true
     if (hurxExecutable && hurxExecutable.path && hurxSourceRoot) {
-        // TODO: extension `.hurx`
+        // TODO: (after MVP) extension `.hurx`
         if (hurxExecutable.extension === 'ts') {
             childProcess = child.spawn(
                 'npx',
@@ -135,7 +92,7 @@ const startChildProcess = () => {
                     `${flags.replace(/((?<!\\)(\\\\)*)\\"/g, '$1"')}`,
                 ],
                 {
-                    cwd: hurxSourceRoot,
+                    cwd: path.join(hurxSourceRoot, 'dev'),
                     stdio: 'inherit',
                     shell: true
                 }
@@ -151,7 +108,7 @@ const startChildProcess = () => {
                     `${flags.replace(/((?<!\\)(\\\\)*)\\"/g, '$1"')}`
                 ],
                 {
-                    cwd: hurxSourceRoot,
+                    cwd: path.join(hurxSourceRoot, 'dev'),
                     stdio: 'inherit',
                     shell: true
                 }
@@ -204,7 +161,7 @@ else if (hurxType === 'hurx.json') {
     processEnvFile(hurxRoot)
     let env: ({ paths: HurxPaths } & HurxConfigEnvironmentBase & { apps: HurxConfigAppsPartial }) | null = null
     try {
-        env = Env.parse(hurxJSON, hurxRoot)
+        env = Env.parse(hurxRoot)
         hurxSourceRoot = hurxJSON.package.built
             ? path.join(hurxRoot, hurxJSON.package.env.default.paths.sources)
             : path.join(hurxRoot, hurxJSON.package.env.default.paths.sources)
@@ -214,6 +171,7 @@ else if (hurxType === 'hurx.json') {
         process.exit()
     }
     if (env) {
+        logger.info(env)
         if (!env.apps.bin?.hurx.default.main) {
             main = env.apps.bin?.hurx.default.main
 

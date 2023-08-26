@@ -1,9 +1,0 @@
-{
-    "extends": "./tsconfig.json",
-    "include": [
-        "./src/bin/hurx/**/*.ts"
-    ],
-    "compilerOptions": {
-        "outDir": "dist/bin/hurx"
-    }
-}

@@ -1,92 +1,51 @@
 import chalk from "chalk"
 import CLI from "../../library/framework/apps/cli/cli"
-import Logger from "../../library/utils/logger"
-import readline from 'readline'
+import { CLIMaster } from "../../library/framework/apps/cli/types"
+import hurxCorePlugin from "../../library/framework/apps/cli/plugins/hurx-core-plugin"
+import Build from "./build/build"
+import Test from "./test"
 
 /**
  * The Hurx CLI
  */
-export default class HurxCLI {
-    /**
-     * The logger
-     */
-    public static readonly logger = new Logger()
+export default class HurxCLI extends CLIMaster {
+    public commands = [
+        Build,
+        Test
+    ]
 
-    /**
-     * The CLI
-     */
-    public static cli = new CLI('hurx')
-        .option('--help -h', 'Shows a help message about the current command')
-        .option('--verbose', 'Enables logging at the "trace" | "debug" | "verbose" levels')
-        .option('--debug', 'Enables logging at the "trace" | "debug" levels')
-        .option('--trace', 'Enables logging at the "trace" level')
-        .command(command => command('build')
-            .option('--app -a <app1> <app2?:number|"test"> <app3?>', 'The name of the app to build')
-            .event('start', (options) => {
-                new Logger().info({
-                    message: 'Build function called',
-                    options
-                })
-            })
-        )
-        // The default start event
-        .event('start', async(options) => {
+    public cli = new CLI('hurx', 'The Hurx CLI')
+        .plugin(hurxCorePlugin)
+        .initialization('Hurx CLI initialization', async({next}) => {
             // Generates the hurx art and renders it
-            console.log(chalk.hex('#000000').bold(`\n${this.generateAsciiArt()} ${chalk.bgHex('#FF601C').hex('#000000').bold(` v1.0.0 `)}\n`))
-
+            console.log(chalk.hex('#000000').bold(`\n${HurxCLI.generateAsciiArt()} ${chalk.bgHex('#FF601C').hex('#000000').bold(` v1.0.0 `)}\n`))
+            
             // Check for support
             if (!process.stdin.isTTY) {
                 console.log()
                 this.logger.label('error', 'fatal', 'You are using a node environment that is incompatible (tty missing)')
                 return
             }
-
+    
             this.logger.info('Hurx CLI started')
-            this.logger.verbose({
-                options
-            })
+            await next()
         })
-        // The default after start event
-        .event('end', async(cli) => new Promise<void>((resolve, reject) => {
-            const execute = async() => {
-                const rl = readline.createInterface({
-                    input: process.stdin,
-                    output: process.stdout
-                })
-                rl.question('> ', async(command) => {
-                    const argv = (command.match(/(?<=\s|^)"(?:\\"|[^"])*(?<!\\)"|\S+/g) || []).map((v) => v.replace(/^\"/g, '').replace(/\"$/g, '').replace(/\\\"/g, '"'))
-        
-                    // Log the argv
-                    this.logger.verbose({
-                        argv
-                    })
-        
-                    // Close the interface
-                    rl.close()
-        
-                    // Start the CLI again
-                    try {
-                        await cli.start(argv || [])
+        // The default start event
+        .event('start', async({cli}) => {
+            await cli.startContext({
+                context: {
+                    middleware: {
+                        name: 'Make -h break the program to show the user helpful instructions',
+                        argv: ['-h']
                     }
-                    catch (err) {}
-
-                    // Execute the end again
-                    await execute()
-                })
-            }
-            execute()
-        }))
-        // The default error handler
-        .event('error', async(error) => {
-            this.logger.error(error)
+                }
+            })
         })
 
     /**
      * Runs the Hurx CLI
      */
-    public static async main() {
-        await this.cli.start()
-    }
+    public static readonly main = async() => await new HurxCLI().start()
 
     /**
      * Generates 3D ascii art of 'HurX'

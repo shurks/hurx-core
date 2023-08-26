@@ -3,12 +3,6 @@
     "package": {
         "name": "@hurx/core",
         "version": "1.0.0",
-        "built": false,
-        "dependencies": {
-            "@hurx/gitignore-deserializer": "^1.0.0"
-        },
-        "devDependencies": {
-        },
         "env": {
             "npm": "production",
             "git": "default",
@@ -25,15 +19,11 @@
                         "logs": "logs"
                     }
                 }
-            },
-            "development": {},
-            "production": {
-                "paths": {
-                    "output": {
-                        "base": "dist/production"
-                    }
-                }
             }
+        },
+        "files": {
+            "indents": 4,
+            "ignore": []
         },
         "apps": {
             "bin": {
@@ -44,7 +34,6 @@
                             "--verbose"
                         ],
                         "paths": {
-                            "base": "",
                             "sources": "src/bin/hurx",
                             "resources": "res/bin/hurx",
                             "logs": "logs/bin/hurx",

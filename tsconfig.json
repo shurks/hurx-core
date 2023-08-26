@@ -20,7 +20,7 @@
         "experimentalDecorators": true,
         "typeRoots": [
             "./node_modules/@types",
-            "./src/library/engine/hurx-json-file/env/env.d.ts"
+            "src/library/engine/env/env.d.ts"
         ],
         "outDir": "./dist",
         "declaration": true,
@@ -31,7 +31,7 @@
     "include": [
         "./src/**/*.ts",
         "./src/**/*.d.ts"
-    ],
+, "src/dev/bin.ts"    ],
     "exclude": [
         "node_modules",
         "dist"

@@ -73,7 +73,7 @@ export default class TextDocumentLogger extends Logger {
      * @param node the node
      */
     public parent = (text: string) => {
-        this.perform({ type: 'trace', node: this.node.options.data.parent || this.node }, `${chalk.bold.bgHex(this.getColor()).hex('#333333')(` ${text} `)}`)
+        this.perform({ type: 'trace', node: this.node.options.data.parent || this.node }, `${chalk.bold.bgHex(this.getColor('trace')).hex('#333333')(` ${text} `)}`)
     }
 
     /**
@@ -99,7 +99,7 @@ export default class TextDocumentLogger extends Logger {
      * @param node the node
      */
     public type = (type: string) => {
-        this.perform({ type: 'trace' }, `${chalk.bgHex(this.getColor()).bold(` ${type} `)}`)
+        this.perform({ type: 'trace' }, `${chalk.bgHex(this.getColor('trace')).bold(` ${type} `)}`)
     }
 
     /**
@@ -108,7 +108,7 @@ export default class TextDocumentLogger extends Logger {
      * @param value the value
      */
     public property = (name: string, node: TextDocumentNode, ...value: string[]) => {
-        this.perform({ type: 'trace' }, `${chalk.hex(this.getColor())(` ${name} `)}${value.map((v) => chalk.bold.bgHex(this.getColor())(` ${v} `)).join(' ')}`)
+        this.perform({ type: 'trace' }, `${chalk.hex(this.getColor('trace'))(` ${name} `)}${value.map((v) => chalk.bold.bgHex(this.getColor('trace'))(` ${v} `)).join(' ')}`)
     }
 
     protected override perform(options: { type: 'verbose' | 'debug' | 'trace' | 'info', node?: TextDocumentNode }, ...data: any[]): void {
@@ -135,7 +135,7 @@ export default class TextDocumentLogger extends Logger {
         for (const d of data) {
             if (typeof d === 'string' || typeof d === 'boolean' || typeof d === 'number' || typeof d === 'bigint' || typeof d === 'function' || typeof d === 'symbol' || typeof d === 'undefined') {
                 const level = node.level
-                const indents = new Array(level).fill(level).map((v, i) => new Array(this.indentsPerLevel).fill('').map((v, j) => chalk.hex(this.getColorForLevel(i + (j / this.indentsPerLevel)))('.')).join('')).join('')
+                const indents = new Array(level).fill(level).map((v, i) => new Array(this.indentsPerLevel).fill('').map((v, j) => chalk.hex(this.getColorForLevel(type, i + (j / this.indentsPerLevel)))('.')).join('')).join('')
                 console.log(`${indents}${d}`)
             }
             else {

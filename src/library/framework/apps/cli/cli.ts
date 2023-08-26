@@ -1,175 +1,49 @@
-import { promisify } from "util"
 import Logger from "../../../utils/logger"
+import Emitter from "../../../utils/reactive/emitter"
+import { Option, Events, EventHandler, CommandOptions, MiddlewareOptions } from "./types"
 
 /**
- * Represents the type of option arguments, which can be used to define
- * the properties and types associated with an option.
+ * The options for the start loop
  */
-export type OptionArguments<E extends string, MustBeUndefined extends boolean = false> =
-    E extends `<${infer A}> ${infer B}`
-        ? A extends `${infer AA}?${infer AB}`
-            ? OptionArgument<A> & OptionArguments<B, true>
-            : MustBeUndefined extends true ? never : OptionArgument<A> & OptionArguments<B>
-        : E extends `<${infer A}>`
-            ? A extends `${infer AA}?${infer AB}`
-                ? OptionArgument<A>
-                : MustBeUndefined extends true ? never : OptionArgument<A>
-            : never
-
-/**
- * Represents the definition of an individual option argument.
- */
-export type OptionArgument<E extends string> = E extends `${infer A}?:${infer B}`
-    ? {
-        properties: {[a in A]: OptionArgumentType<B> | undefined}
-    }
-    : E extends `${infer A}:${infer B}`
-    ? {
-        properties: {[a in A]: OptionArgumentType<B>}
-    }
-    : E extends `${infer A}?`
-    ? {
-        properties: {[a in A]: string | undefined}
-    }
-    : E extends `${infer A}`
-    ? {
-        properties: {[a in A]: string}
-    }
-    : never
-
-/**
- * Represents the TypeScript types that an option argument can take.
- */
-export type OptionArgumentType<E extends string> = E extends `"${infer A}"|${infer B}`
-    ? A | OptionArgumentType<B>
-    : E extends `${infer A}|${infer B}`
-    ? OptionArgumentType<A> | OptionArgumentType<B>
-    : E extends `"${infer A}"`
-    ? A
-    : E extends `${number}`
-    ? number
-    : E extends `number`
-    ? number
-    : E extends `${boolean}`
-    ? boolean
-    : E extends `boolean`
-    ? boolean
-    : E extends `${string}`
-    ? string
-    : E extends `string`
-    ? string
-    : E extends `${infer A}|${infer B}`
-    ? OptionArgumentType<A> | OptionArgumentType<B>
-    : never
-
-/**
- * Represents a command-line option.
- */
-export type Option<E extends string> =
-    {
-        /**
-         * The description of the option
-         */
-        description: string
-        /**
-         * The short form of the option flag (single character).
-         */
-        short?: string
-        /**
-         * The long form of the option flag (full word).
-         */
-        long: string
-        /**
-         * Properties associated with the option.
-         */
-        properties: Record<string, {
-            /**
-             * Allowed types for the property value
-             */
-            types: Array<StringConstructor|BooleanConstructor|NumberConstructor|null|string|undefined>
-            /**
-             * The current value of the property
-             */
-            value: undefined|string|boolean|number|null
-        }>
-        /**
-         * Indicates whether the option is included in the current context.
-         */
-        included: boolean
-    } & (
-        E extends `--${infer A} ${infer B}`
-        ? {
-            long: A
-        } & Option<B>
-        : E extends `--${infer A}`
-        ? {
-            long: A
-        }
-        : E extends `-${infer A} ${infer B}`
-        ? {
-            short: A
-        } & Option<B>
-        : E extends `-${infer A}`
-        ? {
-            short: A
-        }
-        : E extends `<${infer A}>${infer B}`
-        ? OptionArguments<E>
-        : never
-    )
-
-/**
- * The events that can be handled
- */
-export type Events = 'end'|'error'|'start'
-
-/**
- * A handler for a certain event in the CLI
- */
-export type EventHandler<Event extends Events, Name extends string, Options extends string> = Event extends 'end'
-    ? (
-        /**
-         * The CLI instance
-         */
-        cli: CLI<Name, Options>
-    ) => Promise<void>|void
-    : Event extends 'before-start'
-    ? (
-        /**
-         * The CLI instance
-         */
-        cli: CLI<Name, Options>
-    ) => Promise<void>|void
-    : Event extends 'error'
-    ? (
-        /**
-         * The error from the rejected promise
-         */
-        error: Error
-    ) => Promise<void>|void
-    : Event extends 'start'
-    ? (
-        /**
-         * All the used options and their property values
-         */
-        options: {
-            [Long in Options extends `--${infer A} ${infer B}` ? A : Options extends `--${infer A}` ? A : never]: 
-                undefined
-            |   Option<Options extends `--${Long} ${infer B}` ? `--${Long} ${B}` : Options extends `--${Long}` ? `--${Long}` : never>['properties']
-        }
-    ) => Promise<void>|void
-    : never
+type LoopOptions = {
+    /**
+     * Whether to ignore commands while going through the loop
+     */
+    ignoreCommands?: boolean
+    /**
+     * Whether to ignore incomplete options and not throw an error while going through the loop
+     */
+    ignoreIncompleteOptions?: boolean
+}
 
 /**
  * Represents the CLI (Command-Line Interface) class, which provides methods
  * for defining and executing command-line interfaces and subcommands.
+ * 
+ * TODO: add properties
+ * TODO: required options for a command
  */
-export default class CLI<Name extends string = never, Options extends string = never> {
+export default class CLI<Name extends string = never, Options extends string = never, Middlewares extends string = never> {
+    /**
+     * All event emitters
+     */
+    public emitters = {
+        /**
+         * Emitters for on change
+         */
+        change: {
+            /**
+             * Emitter for when the argv property changes
+             */
+            argv: new Emitter<typeof this.argv>()
+        }
+    }
+
     /**
      * The parent CLI instance.
      * @type {CLI|undefined}
      */
-    public parent?: CLI<any, any> = undefined
+    public parent?: CLI<any, any, any> = undefined
 
     /**
      * An array of defined options for this CLI instance.
@@ -182,9 +56,9 @@ export default class CLI<Name extends string = never, Options extends string = n
      * @type {Array<Option>}
      */
     public get allOptions(): typeof this['options'] {
-        let parent = this.parent
+        let parent = this.history[this.history.length - 1].parent
         let options: typeof this['options'] = [
-            ...this.options
+            ...this.history[this.history.length - 1].options
         ]
         while (parent && parent !== this) {
             options = [
@@ -203,15 +77,15 @@ export default class CLI<Name extends string = never, Options extends string = n
      * An array of defined subcommands for this CLI instance.
      * @type {Array<CLI>}
      */
-    public commands: CLI<any, any>[] = []
+    public commands: CLI<any, any, any>[] = []
 
     /**
      * Retrieves all subcommands from the current CLI instance and its parents.
      * @type {Array<CLI>}
      */
-    public get allCommands(): CLI<any, any>[] {
+    public get allCommands(): CLI<any, any, any>[] {
         let parent = this.parent
-        let commands: CLI<any>[] = [
+        let commands: CLI<any, any, any>[] = [
             ...this.commands
         ]
         while (parent && parent !== this) {
@@ -227,11 +101,7 @@ export default class CLI<Name extends string = never, Options extends string = n
     /**
      * The event handlers
      */
-    public handlers: {
-        [Event in Events]: EventHandler<Event, any, any> | undefined
-    } & {
-        start: () => Promise<void>
-    } = {} as any
+    public handlers: {[E in Events]: EventHandler<E, Name, Options, Middlewares> | undefined} = {} as any
 
     /**
      * The current arguments used to run the CLI (default: process.argv)
@@ -241,23 +111,128 @@ export default class CLI<Name extends string = never, Options extends string = n
     /**
      * The command history of the CLI
      */
-    private history: CLI<any, any>[] = [
+    public readonly history: CLI<any, any, any>[] = [
         this
     ]
 
     /**
+     * Arguments to skip
+     */
+    public skip: string[] = []
+
+    /**
+     * All the registered middleware functions
+     */
+    private middlewares: ({
+        /**
+         * The name of the middleware
+         */
+        name: Middlewares
+        /**
+         * Whether it's an initialization middleware
+         */
+        initialization?: boolean
+        /**
+         * The actual middleware function to execute
+         * @param options the options
+         */
+        cb: (options: MiddlewareOptions<Name, Options, Middlewares>) => Promise<void>
+    })[] = []
+
+    /**
+     * The currently running middleware
+     */
+    private currentMiddleware: Middlewares|null = null
+
+    /**
+     * The last options
+     */
+    private get lastOptions(): CommandOptions<Options> {
+        const options = {} as any
+        for (const option of this.allOptions) {
+            if (option.included) {
+                options[option.long] = {}
+                for (const propertyName of Object.keys(option.properties)) {
+                    const property = option.properties[propertyName]
+                    if (property.value !== undefined) {
+                        options[option.long][propertyName] = property.value
+                    }
+                }
+            }
+        }
+        return options
+    }
+
+    /**
      * The logger instance used for logging messages.
      */
-    private logger = new Logger()
+    public logger = new Logger()
 
     /**
      * Creates an instance of the CLI class.
      * @param {string} name - The name of the CLI.
+     * @param {string} description - The description of the CLI (or command)
      * @param {CLI} [parent] - The parent CLI instance, if any.
      */
-    constructor(public name: Name, parent?: CLI<any, any>) {
+    constructor(public name: Name, public description: string, parent?: CLI<any, any, any>) {
         this.parent = parent
         this.commands.push(this)
+    }
+
+    /**
+     * Adds a new initialization function to be executed ONLY ONCE before the first `start` event
+     * of this command or any of its childs
+     * @param handler the handler
+     */
+    public initialization<MName extends string>(name: MName, handler: (options: MiddlewareOptions<Name, Options, Middlewares|MName>) => Promise<void>|void): CLI<Name, Options, Exclude<Middlewares | MName, never>> {
+        this.middlewares.push({
+            name: name as any,
+            initialization: true,
+            cb: async(options: MiddlewareOptions<Name, Options, Middlewares>) => {
+                const promise = handler(options as any)
+                if (promise instanceof Promise) {
+                    await promise
+                }
+            }
+        })
+        return this as any
+    }
+
+    /**
+     * Adds a new middleware function to be executed before the start
+     * of this command or any of its childs
+     * @param handler the handler
+     */
+    public middleware<MName extends string>(name: MName, handler: (options: MiddlewareOptions<Name, Options, Middlewares|MName>) => Promise<void>|void): CLI<Name, Options, Exclude<Middlewares | MName, never>> {
+        this.middlewares.push({
+            name: name as any,
+            cb: async(options: MiddlewareOptions<Name, Options, Middlewares>) => {
+                const promise = handler(options as any)
+                if (promise instanceof Promise) {
+                    await promise
+                }
+            }
+        })
+        return this as any
+    }
+
+    /**
+     * TODO: type O should exclude options with the same name as existing ones
+     * Add another cli as a plugin, this merges all properties
+     * and will overwrite existing ones if they exist.
+     * @param cli the cli to merge into this cli
+     * @returns this cli
+     */
+    public plugin<N extends string, O extends string, M extends string>(cli: CLI<N, O, M>): CLI<Name, Options|O, Middlewares|M> {
+        this.commands.push(...cli.commands.filter((v) => !this.commands.map((v) => v.name).includes(v.name) && v.name !== cli.name))
+        this.options.push(...cli.options.filter((v) => !this.options.map((v) => v.long).includes(v.long) && (!v.short || !this.options.filter((v) => v.short).map((v) => v.short).includes(v.short))))
+        this.middlewares.push(...cli.middlewares as any[])
+        for (const handler of Object.keys(cli.handlers)) {
+            if ((cli.handlers as any)[handler] && !(this.handlers as any)[handler]) {
+                (this.handlers as any)[handler] = (cli.handlers as any)[handler]
+            }
+        }
+        return this as any
     }
 
     /**
@@ -267,15 +242,16 @@ export default class CLI<Name extends string = never, Options extends string = n
      * @param handler The callback function
      * @returns The builder
      */
-    public event(event: 'start', handler: EventHandler<'start', Name, Options>): CLI<Name, Options>
+    public event(event: 'start', handler: EventHandler<'start', Name, Options, Middlewares>): CLI<Name, Options, Middlewares>
 
     /**
+     * TODO: make it work for other commands too
      * Set an execution function for just after this command/CLI instance is done running its command.
      * @param event The end event
      * @param handler The callback function
      * @returns The builder
      */
-    public event(event: 'end', handler: EventHandler<'end', Name, Options>): CLI<Name, Options>
+    public event(event: 'end', handler: EventHandler<'end', Name, Options, Middlewares>): CLI<Name, Options, Middlewares>
 
     /**
      * Sets an error handler in case the start event reject( an Error)
@@ -283,47 +259,30 @@ export default class CLI<Name extends string = never, Options extends string = n
      * @param handler The callback function
      * @returns The builder
      */
-    public event(event: 'error', handler: EventHandler<'error', Name, Options>): CLI<Name, Options>
+    public event(event: 'error', handler: EventHandler<'error', Name, Options, Middlewares>): CLI<Name, Options, Middlewares>
 
     /**
      * Fires upon one of the lifecycle events
      * @param event The event
      * @param handler The handler
      */
-    public event(event: Events, handler: EventHandler<Events, Name, Options>): this {
+    public event<E extends Events = Events>(event: E, handler: EventHandler<E, Name, Options, Middlewares>): this {
         switch (event) {
-            case 'start': {
-                this.handlers.start = async() => {
-                    const options = {} as any
-                    for (const option of this.allOptions) {
-                        if (option.included) {
-                            options[option.long] = {}
-                            for (const propertyName of Object.keys(option.properties)) {
-                                const property = option.properties[propertyName]
-                                if (property.value !== undefined) {
-                                    options[option.long][propertyName] = property.value
-                                }
-                                property.value = undefined
-                            }
-                            option.included = false
-                        }
-                    }
-                    const handle = handler(options)
+            case 'error': {
+                this.handlers[event] = async(options: Parameters<EventHandler<Events, Name, Options, Middlewares>>[0]) => {
+                    const handle = handler(options as Parameters<EventHandler<'error', Name, Options, Middlewares>>[0])
                     if (handle instanceof Promise) {
                         await handle
                     }
                 }
                 return this as any
             }
-            case 'end': {
-                this.handlers[event] = async() => {
-                    await handler(this as any)
-                }
-                return this as any
-            }
-            case 'error': {
-                this.handlers[event] = async(error: Error) => {
-                    await handler(error as any)
+            default: {
+                this.handlers[event] = async(options: Parameters<EventHandler<Exclude<Events, 'error'>, Name, Options, Middlewares>>[0]) => {
+                    const handle = (handler as EventHandler<Exclude<E, 'error'>, Name, Options, Middlewares>)(options)
+                    if (handle instanceof Promise) {
+                        await handle
+                    }
                 }
                 return this as any
             }
@@ -335,10 +294,14 @@ export default class CLI<Name extends string = never, Options extends string = n
      * entry point.
      * @param opt the option
      * @param description the description
+     * @param cb the callback when the option has been selected, this will be executed
+     *           before the `start` event of a command and it will fire for all child
+     *           commands as well.
      * @returns 
      */
-    public option<T extends string>(opt: T, description: string): CLI<Name, Options|T> {
+    public option<T extends string>(opt: T, description: string, cb?: (cli: this) => Promise<void>|void): CLI<Name, Options|T, Middlewares> {
         let option: typeof this['options'][number] = { description, included: false } as any
+        option.cb = cb as any
 
         // Long option, followed by a short option
         if (/^(\-\-)(.+)(\s)(\-)(.+)/.test(opt)) {
@@ -389,130 +352,131 @@ export default class CLI<Name extends string = never, Options extends string = n
     }
 
     /**
-     * Adds a new sub-command to a command line interface (CLI) instance.
-     * @param cb the callback, which should be used as a return type to create a sub-command
-     * @returns The builder
+     * Executes the given arguments in the CLI, the arguments are appended
+     * to the arguments of `this.start`.
+     * @param argv the arguments
      */
-    public command<Opts extends string>(cb: (command: <T extends string>(name: T) => CLI<T, Options>) => CLI<string, Options|Opts>): CLI<Name, Options> {
-        this.commands.push(cb((name) => {
-            const cli = new CLI(name, this)
-            cli.options = this.options
-            return cli as any
-        }))
-        return this as any
+    public async executeArgv(...argv: string[]) {
+        return await this.start([...this.argv, ...argv])
     }
 
     /**
-     * Starts the CLI with the specified command-line arguments.
-     * @param {string[]} [argv=process.argv] The command-line arguments, make sure not to include the first two
-     *                                       entries of node.js if using process.argv
+     * Stars the CLI based on a certain context and command-line arguments
+     * @param options the options
+     * @param argv the arguments
      */
-    public async start(argv: string[] = process.argv.filter((v, i) => i > 1)) {
+    public startContext = async(config: {
+        /**
+         * The context to run, there can only be one and there has to be one specified.
+         */
+        context: {
+            /**
+             * Starts a middleware
+             */
+            middleware?: {
+                /**
+                 * The current middleware, if any
+                 */
+                current?: Middlewares
+                /**
+                 * Name of the middleware to run
+                 */
+                name: Middlewares
+                /**
+                 * The arguments, will throw an error if there are commands in there.
+                 */
+                argv: string[]
+                /**
+                 * Whether to include the last argv in the arguments
+                 */
+                includeLastArgv?: boolean
+                /**
+                 * Whether to include commands in the current/last argv values
+                 */
+                includeCommands?: 'last' | 'current' | 'both'
+            }
+            /**
+             * Starts a command based on arguments
+             */
+            argv?: {
+                argv: string[]
+            }
+        }
+    }) => {
         return new Promise<this>(async(resolve, reject) => {
             try {
-                this.argv = argv
-                let oneCommandFound = false
-                let firedLastCommand = false
-                let options: typeof this.history[number]['options'] = []
-        
-                /**
-                 * Finds and processes the option within the current command.
-                 * @param {CLI} command - The current command.
-                 * @param {string} opt - The current option.
-                 */
-                const findOption = (command: CLI<any, any>, opt: string) => {
-                    const found = command.allOptions.find((o) => `--${o.long}` === opt || (o.short && opt.toLowerCase().includes(o.short.toLowerCase()) && opt.startsWith('-') && !opt.startsWith('--')))
-                    if (found) {
-                        if (found.short && opt.toLowerCase().includes(found.short.toLowerCase()) && opt.startsWith('-') && !opt.startsWith('--')) {
-                            if (opt.replace(/^\-/g, '').length > 1) {
-                                this.logger.verbose(`Found short combo "${opt}"`)
-                                const letters = opt.replace(found.short, '').replace('-', '')
-                                const parsed: string[] = [found.short]
-                                options = [found]
-                                found.included = true
-                                for (const letter of letters) {
-                                    if (parsed.includes(letter.toLowerCase())) {
-                                        this.logger.verbose(`Duplicate short option: "${letter}"`)
-                                    }
-                                    const option = command.allOptions.find((v) => v.short && v.short.toLowerCase() === letter.toLowerCase())
-                                    if (option) {
-                                        options.push(option)
-                                        option.included = true
-                                        parsed.push(letter.toLowerCase())
-                                    }
-                                    else {
-                                        throw new Error(`No definition for short option "${letter}" could be found`)
-                                    }
-                                }
-                            }
-                            else {
-                                this.logger.verbose(`Found short option: "${opt}"`)
-                                options = [found]
-                                found.included = true
-                            }
-                        }
-                        else if (opt.startsWith('--')) {
-                            this.logger.verbose(`Found option: "${opt}"`)
-                            options = [found]
-                            found.included = true
-                        }
+                // Checks if there is exactly 1 context
+                if (Object.keys(config.context).length !== 1) {
+                    if (Object.keys(config.context).length === 0) {
+                        throw Error(`There has to be one context specified in the config of the startContext function.`)
                     }
                     else {
-                        if (opt.startsWith('-') && !opt.startsWith('--')) {
-                            if (opt.length > 2) {
-                                throw new Error(`No definition for any of the short options "${opt}" could be found`)
-                            }
-                            else {
-                                throw new Error(`No definition for short option "${opt}" could be found`)
-                            }
-                        }
-                        else if (opt.startsWith('--')) {
-                            throw new Error(`No definition for option "${opt}" could be found`)
-                        }
-                        return
+                        throw Error(`There cannot be more than one context specified in the config of the startContext function.`)
                     }
                 }
-        
-                /**
-                 * Executes a command
-                 * @param command the command to execute
-                 */
-                const executeCommand = async(command: CLI<any, any>) => {
-                    if (!command.handlers.start) {
-                        throw new Error(`Command "${command.name}" has no "start" event specified`)
+                
+                this.logger.trace(`Starting context: "${Object.keys(config.context)[0]}"`)
+                if (config.context.middleware) {
+                    if (!this.middlewares.find((v) => v.name === config.context.middleware!.name && !v.initialization)) {
+                        throw Error(`There's no middleware by the name of "${config.context.middleware}" in CLI "${this.name}"`)
                     }
-                    firedLastCommand = true
-                    this.logger.verbose(`Running command "${command.name}" start event`)
-                    await command.handlers.start()
+                    this.currentMiddleware = config.context.middleware.current || null
                 }
 
-                /**
-                 * Finds and processes the subcommand within the current command.
-                 * @param {CLI} command - The current command.
-                 * @param {string} name - The name of the subcommand.
-                 */
-                const findCommand = async(command: CLI<any, any>, name: string) => {
-                    const found = command.allCommands.find((c) => c.name === name)
-                    if (found) {
-                        this.logger.verbose(`Found command: "${name}"`)
-                        if (oneCommandFound) {
-                            const lastCommand = this.history[this.history.length - 1]
-                            if (lastCommand) {
-                                this.logger.verbose(`First executing previous command "${lastCommand.name}"`)
-                                await executeCommand(lastCommand)
+                // Set the argv
+                const lastArgv = this.argv
+                let argv = [
+                    ...config.context.middleware
+                        ? config.context.middleware.argv
+                        : config.context.argv
+                            ? config.context.argv.argv
+                            : []
+                ].filter(Boolean)
+
+                // Include the last argv if its asked for, by default
+                // a middleware won't use the last argv.
+                if (config.context.middleware?.includeLastArgv || !argv.filter(Boolean).length) {
+                    argv = [...lastArgv, ...argv]
+                }
+
+                // Only saves the argv when there are arguments
+                // Set the argv, or reruns the same argv if it's empty
+                if (argv.length) {
+                    this.argv = [...argv]
+                    await this.emitters.change.argv.emit(this.argv)
+                }
+
+                // TRACE the args
+                this.logger.verbose({
+                    lastArgv,
+                    argv
+                })
+                
+                // Reset the last options
+                if (!config.context.middleware || !config.context.middleware.includeLastArgv) {
+                    for (const option of this.allOptions) {
+                        if (option.included) {
+                            for (const propertyName of Object.keys(option.properties)) {
+                                option.properties[propertyName].value = undefined
                             }
+                            option.included = false
                         }
-                        this.history.push(found)
-                        oneCommandFound = true
-                    }
-                    else {
-                        if (!name.startsWith('-')) {
-                            throw new Error(`No definition for command "${name}" could be found`)
-                        }
-                        return
                     }
                 }
-        
+
+                // Whether a command has been found or not so far
+                let oneCommandFound = false
+
+                // The executed commands
+                let commandsToExecute: string[] = []
+
+                // All the options that are found based on the arguments
+                let options: typeof this.history[number]['options'] = []
+
+                // Whether or not the initialization function has succeeded,
+                // in other words; the next() function has been called
+                let succeeded = true
+
                 /**
                  * Sets the value in the property of an option in a CLI instance
                  * @param syntax the syntax string
@@ -546,143 +510,436 @@ export default class CLI<Name extends string = never, Options extends string = n
                         throw new Error(`Property <${propertyKey}> in ${options.length > 1 ? `-${options.map((v) => v.short).join('')}` : `--${options[0].long}`} ${syntax} is not of type ${propertyObject.types.map((v) => v === String ? 'string' : v === undefined ? 'undefined' : v === Number ? 'number' : v === Boolean ? 'boolean' : v).join(' | ')}`)
                     }
                 }
-        
+
                 // Loops through the argv arguments
-                for (let i = 0; i < argv.length; i ++) {
-                    let arg = argv[i]
-                    // It's an option
-                    if (arg.startsWith('-')) {
-                        findOption(this.history[this.history.length - 1], arg)
-                    }
-                    // It's a command
-                    else {
-                        await findCommand(this.history[this.history.length - 1], arg)
-                    }
-                    // There are options that are currently active and are awaiting
-                    // values from the argv arguments
-                    if (options.length) {
-                        // Parse the syntax string `-a <b:string> etc`
-                        const required: Record<string, typeof options[number]['properties']> = {}
-                        const optional: Record<string, typeof options[number]['properties']> = {}
-                        let syntax = ''
-                        let optionalSyntax = ''
-                        for (const option of options) {
-                            required[option.long] = {}
-                            optional[option.long] = {}
-                            if (option.properties) {
-                                for (const property of Object.keys(option.properties)) {
-                                    const propertyObject = option.properties[property]
-                                    let typeSyntax = ''
-                                    let types = []
-                                    for (const type of propertyObject.types) {
-                                        if (type === String) {
-                                            types.push('string')
+                const loop = async(loopOptions: LoopOptions) => {
+                    loop: for (let i = 0; i < argv.length; i ++) {
+                        let arg = argv[i]
+                        // It's an option
+                        if (arg.startsWith('-')) {
+                            const found = this.history[this.history.length - 1].allOptions.find((o) => `--${o.long}` === arg || (o.short && arg.toLowerCase().includes(o.short.toLowerCase()) && arg.startsWith('-') && !arg.startsWith('--')))
+                            if (found) {
+                                if (found.short && arg.toLowerCase().includes(found.short.toLowerCase()) && arg.startsWith('-') && !arg.startsWith('--')) {
+                                    if (arg.replace(/^\-/g, '').length > 1) {
+                                        this.logger.verbose(`Found short combo "${arg}"`)
+                                        const letters = arg.replace(found.short, '').replace('-', '')
+                                        const parsed: string[] = [found.short]
+                                        options = [found]
+                                        found.included = true
+                                        for (const letter of letters) {
+                                            if (parsed.includes(letter.toLowerCase())) {
+                                                this.logger.verbose(`Duplicate short option: "${letter}"`)
+                                            }
+                                            const option = this.history[this.history.length - 1].allOptions.find((v) => v.short && v.short.toLowerCase() === letter.toLowerCase())
+                                            if (option) {
+                                                options.push(option)
+                                                option.included = true
+                                                parsed.push(letter.toLowerCase())
+                                            }
+                                            else {
+                                                if (!loopOptions.ignoreIncompleteOptions) {
+                                                    throw new Error(`No definition for short option "${letter}" could be found`)
+                                                }
+                                            }
                                         }
-                                        else if (typeof type === 'string') {
-                                            types.push(`"${type}"`)
-                                        }
-                                        else if (type === Number) {
-                                            types.push('number')
-                                        }
-                                        else if (type === Boolean) {
-                                            types.push('boolean')
-                                        }
-                                        else if (type === null) {
-                                            types.push('null')
-                                        }
-                                    }
-                                    if (propertyObject.types.includes(undefined)) {
-                                        typeSyntax = '?'
-                                        optional[option.long][property] = propertyObject
-                                        optionalSyntax = `${optionalSyntax} <${property}${typeSyntax}${types.length ? `:${types.join('|')}` : ''}>`.trim()
                                     }
                                     else {
-                                        required[option.long][property] = propertyObject
-                                        syntax = `${syntax} <${property}${typeSyntax}${types.length ? `:${types.join('|')}` : ''}>`.trim()
+                                        this.logger.verbose(`Found short option: "${arg}"`)
+                                        options = [found]
+                                        found.included = true
                                     }
+                                }
+                                else if (arg.startsWith('--')) {
+                                    this.logger.verbose(`Found option: "${arg}"`)
+                                    options = [found]
+                                    found.included = true
                                 }
                             }
                             else {
-                                this.logger.verbose(`Option "${option.long}" doesn't have properties`)
-                            }
-                        }
-                        syntax = `${optionalSyntax.length ? syntax + ' ' : syntax}${optionalSyntax}`.trim()
-                        this.logger.verbose(`Syntax for the current option(s): "${options.length > 1 ? `-${options.map((v) => v.short).join('')}` : `--${options[0].long}`}${syntax ? ` ${syntax}` : ''}"`)
-                        
-                        // Loops through all the required and optional properties
-                        // within the selected options, and sets the values.
-                        whileLoop: while (true) {
-                            // Loops through all the required options
-                            for (const optionLongKey of Object.keys(required)) {
-                                for (const propertyKey of Object.keys(required[optionLongKey])) {
-                                    i++
-                                    const arg = argv[i]
-                                    if (!arg) {
-                                        throw new Error(`Property <${propertyKey}> in ${options.length > 1 ? `-${options.map((v) => v.short).join('')}` : `--${options[0].long}`} ${syntax} is missing`)
+                                if (arg.startsWith('-') && !arg.startsWith('--')) {
+                                    if (!loopOptions.ignoreIncompleteOptions) {
+                                        if (arg.length > 2) {
+                                            throw new Error(`No definition for any of the short options "${arg}" could be found`)
+                                        }
+                                        else {
+                                            throw new Error(`No definition for short option "${arg}" could be found`)
+                                        }
                                     }
-                                    const propertyObject = required[optionLongKey][propertyKey]
-                                    setValue(syntax, arg, optionLongKey, propertyKey, propertyObject)
+                                }
+                                else if (arg.startsWith('--')) {
+                                    if (!loopOptions.ignoreIncompleteOptions) {
+                                        throw new Error(`No definition for option "${arg}" could be found`)
+                                    }
                                 }
                             }
-                            // Loops through all the optional options
-                            for (const optionLongKey of Object.keys(optional)) {
-                                for (const propertyKey of Object.keys(optional[optionLongKey])) {
-                                    i++
-                                    const arg = argv[i]
-                                    if (!arg) {
-                                        this.logger.verbose(`Out of arguments`)
-                                        i --
-                                        break whileLoop
+                        }
+                        // It's a command
+                        else {
+                            if (config.context.middleware) {
+                                if (!config.context.middleware.includeCommands) {
+                                    this.logger.verbose('BREAK')
+                                    continue loop
+                                }
+                                else if (config.context.middleware.includeCommands !== 'both') {
+                                    if (config.context.middleware.includeCommands === 'current') {
+                                        if (config.context.middleware.includeLastArgv && i < lastArgv.length) {
+                                            i = lastArgv.length - 1
+                                            continue loop
+                                        }
                                     }
-                                    if (
-                                        (arg.startsWith('--') && this.history[this.history.length - 1].allOptions.map((v) => v.long).includes(arg.replace(/^\-\-/g, '')))
-                                        || (arg.startsWith('-') && !arg.startsWith('--') && this.history[this.history.length - 1].allOptions.filter((v) => v.short).map((v) => v.long).includes(arg.replace(/^\-/g, '')))
-                                        || this.history[this.history.length - 1].allCommands.find((c) => c.name === arg)
-                                    ) {
-                                        this.logger.verbose(`Argument "${arg}" is a command or option, breaking`)
-                                        i --
-                                        break whileLoop
+                                    else if (config.context.middleware.includeCommands === 'last') {
+                                        if (config.context.middleware.includeLastArgv && i >= lastArgv.length) {
+                                            continue loop
+                                        }
                                     }
-                                    const propertyObject = optional[optionLongKey][propertyKey]
-                                    setValue(syntax, arg, optionLongKey, propertyKey, propertyObject)
                                 }
                             }
-                            break
+                            let found = this.history[this.history.length - 1].allCommands.find((v) => v.name === argv[i])
+                            if (found) {
+                                this.history.push(found)
+                                while (found) {
+                                    i++
+                                    found = found.commands.find((v) => v.name === argv[i])
+                                    if (found) {
+                                        arg = argv[i]
+                                        this.history.push(found)
+                                    }
+                                }
+                                i--
+                                found = this.history[this.history.length - 1]
+                                this.logger.verbose(`Found command: "${arg}"`)
+                                if (oneCommandFound) {
+                                    const lastCommand = this.history[this.history.length - 1]
+                                    if (lastCommand) {
+                                        this.logger.trace(`First executing previous command "${lastCommand.name}"`)
+                                        if (succeeded) {
+                                            if (loopOptions.ignoreCommands) {
+                                                continue loop
+                                            }
+                                            // await this.executeCommand({
+                                            //     command: lastCommand,
+                                            //     execute: ['command']
+                                            // })
+                                            commandsToExecute.push(lastCommand.name)
+                                        }
+                                    }
+                                }
+                                oneCommandFound = true
+                            }
+                            else {
+                                if (!arg.startsWith('-')) {
+                                    throw new Error(`No definition for command "${arg}" could be found`)
+                                }
+                                return
+                            }
                         }
-                        options = []
+                        // There are options that are currently active and are awaiting
+                        // values from the argv arguments
+                        if (options.length) {
+                            // Parse the syntax string `-a <b:string> etc`
+                            const required: Record<string, typeof options[number]['properties']> = {}
+                            const optional: Record<string, typeof options[number]['properties']> = {}
+                            let syntax = ''
+                            let optionalSyntax = ''
+                            for (const option of options) {
+                                required[option.long] = {}
+                                optional[option.long] = {}
+                                if (option.properties) {
+                                    for (const property of Object.keys(option.properties)) {
+                                        const propertyObject = option.properties[property]
+                                        let typeSyntax = ''
+                                        let types = []
+                                        for (const type of propertyObject.types) {
+                                            if (type === String) {
+                                                types.push('string')
+                                            }
+                                            else if (typeof type === 'string') {
+                                                types.push(`"${type}"`)
+                                            }
+                                            else if (type === Number) {
+                                                types.push('number')
+                                            }
+                                            else if (type === Boolean) {
+                                                types.push('boolean')
+                                            }
+                                            else if (type === null) {
+                                                types.push('null')
+                                            }
+                                        }
+                                        if (propertyObject.types.includes(undefined)) {
+                                            typeSyntax = '?'
+                                            optional[option.long][property] = propertyObject
+                                            optionalSyntax = `${optionalSyntax} <${property}${typeSyntax}${types.length ? `:${types.join('|')}` : ''}>`.trim()
+                                        }
+                                        else {
+                                            required[option.long][property] = propertyObject
+                                            syntax = `${syntax} <${property}${typeSyntax}${types.length ? `:${types.join('|')}` : ''}>`.trim()
+                                        }
+                                    }
+                                }
+                                else {
+                                    this.logger.verbose(`Option "${option.long}" doesn't have properties`)
+                                }
+                            }
+                            syntax = `${optionalSyntax.length ? syntax + ' ' : syntax}${optionalSyntax}`.trim()
+                            this.logger.verbose(`Syntax for the current option(s): "${options.length > 1 ? `-${options.map((v) => v.short).join('')}` : `--${options[0].long}`}${syntax ? ` ${syntax}` : ''}"`)
+                            
+                            // Loops through all the required and optional properties
+                            // within the selected options, and sets the values.
+                            whileLoop: while (true) {
+                                // Loops through all the required options
+                                for (const optionLongKey of Object.keys(required)) {
+                                    for (const propertyKey of Object.keys(required[optionLongKey])) {
+                                        i++
+                                        const arg = argv[i]
+                                        if (!arg) {
+                                            throw new Error(`Property <${propertyKey}> in ${options.length > 1 ? `-${options.map((v) => v.short).join('')}` : `--${options[0].long}`} ${syntax} is missing`)
+                                        }
+                                        const propertyObject = required[optionLongKey][propertyKey]
+                                        setValue(syntax, arg, optionLongKey, propertyKey, propertyObject)
+                                    }
+                                }
+                                // Loops through all the optional options
+                                for (const optionLongKey of Object.keys(optional)) {
+                                    for (const propertyKey of Object.keys(optional[optionLongKey])) {
+                                        i++
+                                        const arg = argv[i]
+                                        if (!arg) {
+                                            this.logger.verbose(`Out of arguments`)
+                                            i --
+                                            break whileLoop
+                                        }
+                                        if (
+                                            (arg.startsWith('--') && this.history[this.history.length - 1].allOptions.map((v) => v.long).includes(arg.replace(/^\-\-/g, '')))
+                                            || (arg.startsWith('-') && !arg.startsWith('--') && this.history[this.history.length - 1].allOptions.filter((v) => v.short).map((v) => v.long).includes(arg.replace(/^\-/g, '')))
+                                            || this.history[this.history.length - 1].allCommands.find((c) => c.name === arg)
+                                        ) {
+                                            this.logger.verbose(`Argument "${arg}" is a command or option, breaking`)
+                                            i --
+                                            break whileLoop
+                                        }
+                                        const propertyObject = optional[optionLongKey][propertyKey]
+                                        setValue(syntax, arg, optionLongKey, propertyKey, propertyObject)
+                                    }
+                                }
+                                break
+                            }
+                            options = []
+                        }
                     }
                 }
+
+                // Execute the middleware of the cli
+                if (config.context.argv) {
+                    // Find all options, but skip commands
+                    await loop({
+                        ignoreCommands: true,
+                        ignoreIncompleteOptions: true
+                    })
+                    // Store the succeeded variable
+                    this.logger.trace(`Firing initializations`)
+                    succeeded = await this.executeCommand({
+                        command: this,
+                        execute: ['initialization']
+                    })
+                }
+
+                // Start finding commands and options
+                await loop({})
                 
-                // Fire the command if not done already
-                const lastCommand = this.history[this.history.length - 1] || this
-                if (lastCommand) {
-                    this.logger.verbose(`Firing command "${lastCommand.name}"`)
-                    await executeCommand(lastCommand)
+                // Finish up when the context is arguments
+                if (config.context.argv) {
+                    // Fire the middleware
+                    this.logger.trace(`Firing middleware at end of function`)
+                    if (succeeded) {
+                        succeeded = await this.executeCommand({
+                            command: this,
+                            execute: ['middleware']
+                        })
+                    }
+
+                    // Skips the middleware if the initialization failed
+                    if (succeeded) {
+                        // Fire the command if not done already
+                        const lastCommand = this.history[this.history.length - 1] || this
+                        if (!commandsToExecute.includes(lastCommand.name)) {
+                            commandsToExecute.push(lastCommand.name)
+                        }
+                        // Execute all commands
+                        for (const name of commandsToExecute) {
+                            const command = (lastCommand || this).allCommands.find((v) => v.name === name)
+                            if (!command) {
+                                throw Error(`Something went terribly wrong, trying to execute non-existing command`)
+                            }
+                            // Skip commands that are in deeper CLI's, which will
+                            // set the skip value. (See types.ts -> CLIMaster@convertToCommand)
+                            if (!this.skip.includes(name)) {
+                                await this.executeCommand({
+                                    command,
+                                    execute: ['command']
+                                })
+                            }
+                        }
+                        // Reset skip
+                        this.skip = []
+                    }
+                }
+
+                // When its middleware
+                else if (config.context.middleware) {
+                    if (succeeded) {
+                        const middleware = this.middlewares.find((v) => v.name === config.context.middleware!.name && !v.initialization)
+                        if (middleware) {
+                            await middleware.cb({
+                                cli: this,
+                                options: this.lastOptions,
+                                next: async() => {
+                                    this.argv = lastArgv
+                                    this.currentMiddleware = null
+                                }
+                            })
+                            return resolve(this)
+                        }
+                        else {
+                            throw Error(`Something went terribly wrong, this check should already be done at the start of the function!!!`)
+                        }
+                    }
                 }
             }
             catch (err) {
                 const handler = this.handlers.error
                 if (handler) {
-                    const handle = handler(err instanceof Error ? err : new Error(err as any))
+                    const handle = handler({
+                        error: err instanceof Error ? err : new Error(err as any),
+                        cli: this,
+                        options: this.lastOptions
+                    })
                     if (handle instanceof Promise) {
                         await handle
                     }
+                    if (!config.context.argv) {
+                        return resolve(this)
+                    }
+                }
+                else {
+                    return reject(err)
                 }
             }
             try {
                 const endHandler = this.handlers['end']
                 if (endHandler) {
-                    this.logger.verbose(`Running command "${this.name}" end event`)
-                    await endHandler(this)
+                    this.logger.trace(`Running command "${this.name}" end event`)
+                    await endHandler({
+                        cli: this,
+                        options: this.lastOptions
+                    })
                 }
+                return resolve(this)
             }
             catch (err) {
                 const handler = this.handlers.error
                 if (handler) {
-                    await handler(err instanceof Error ? err : new Error(err as any))
+                    const handle = handler({
+                        error: err instanceof Error ? err : new Error(err as any),
+                        cli: this,
+                        options: this.lastOptions
+                    })
+                    if (handle instanceof Promise) {
+                        await handle
+                    }
+                    return resolve(this)
                 }
-                return reject(err)
+                else {
+                    return reject(err)
+                }
             }
         })
+    }
+
+    /**
+     * Starts the CLI with the specified command-line arguments.
+     * @param {string[]} [argv=process.argv] The command-line arguments, make sure not to include the first two
+     *                                       entries of node.js if using process.argv
+     */
+    public async start(argv: string[] = process.argv.filter((v, i) => i > 1)) {
+        await this.startContext({ context: { argv: { argv } } })
+    }
+
+    /**
+     * Executes a command
+     * @param command the command to execute
+     * @return {boolean} false if the next() function has NOT been called in case of middlewares or initializations, otherwise true
+     */
+    private executeCommand = async(config: {
+        command: CLI<any, any, any>,
+        execute: ('middleware'|'initialization'|'command')[]
+    }): Promise<boolean> => {
+        const {
+            command,
+            execute
+        } = config
+        if (!command.handlers.start) {
+            this.logger.info(`Command "${command.name}" has no "start" event specified`)
+        }
+        const runCommand = async() => {
+            this.logger.verbose(`Running command "${command.name}" start event`)
+            if (command.handlers.start) {
+                await command.handlers.start({
+                    cli: this,
+                    options: this.lastOptions
+                })
+            }
+        }
+        if (execute.includes('middleware') || execute.includes('initialization')) {
+            let middlewares: typeof this.middlewares = []
+            let parent: CLI<any, any, any>|undefined = command
+            let nextHasBeenCalled = false
+            while (parent) {
+                middlewares = [...(parent.middlewares || []), ...middlewares].filter((m) => m.name !== this.currentMiddleware && (execute.includes('initialization') || !m.initialization))
+                if (!execute.includes('middleware')) {
+                    middlewares = middlewares.filter((v) => v.initialization)
+                }
+                parent = parent.parent
+            }
+            if (middlewares.length) {
+                const call = async(i: number = 0) => {
+                    nextHasBeenCalled = false
+                    if (middlewares[i]) {
+                        let middlewareStart = middlewares.filter((v) => v.initialization).length
+                        if (i < middlewareStart) {
+                            this.logger.trace(`Firing initialization "${middlewares[i].name}" ${i + 1}/${middlewareStart}`)
+                        }
+                        else {
+                            this.logger.trace(`Firing middleware "${middlewares[i].name}" ${(i - middlewareStart) + 1}/${middlewares.length - middlewareStart}`)
+                        }
+                        await middlewares[i].cb({
+                            options: this.lastOptions,
+                            next: async() => {
+                                this.logger.verbose(i === middlewares.length - 1 ? `All middlewares have been executed` : `Next middleware`)
+                                nextHasBeenCalled = true
+                                await call(i + 1)
+                            },
+                            cli: this
+                        })
+                    }
+                    else if (execute.includes('command')) {
+                        nextHasBeenCalled = true
+                        await runCommand()
+                    }
+                    else {
+                        nextHasBeenCalled = true
+                    }
+                }
+                await call()
+                return nextHasBeenCalled
+            }
+            else if (execute.includes('command')) {
+                await runCommand()
+            }
+        }
+        else if (execute.includes('command')) {
+            await runCommand()
+        }
+        return true
     }
 }

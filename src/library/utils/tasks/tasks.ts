@@ -1,26 +1,16 @@
 import Logger from "../logger"
-import { Task } from "./models/task"
+import { Task } from "./task"
 
 /**
  * The manager for a series of `Task`'s
  */
 export default class Tasks<T extends Task<Names, Runs> = never, Names extends string = never, Runs extends (...params: any[]) => any = never, N extends string = never> {
     public logger = new Logger()
-    public _cache: any
     constructor(public name: N) {}
     /**
      * All registered tasks
      */
     public tasks: Record<string, Task<any, any>> = {}
-    /**
-     * Sets the cache
-     * @param cache the cache
-     * @returns the cache
-     */
-    public cache<T>(cache: T) {
-        this._cache = cache
-        return this as any
-    }
     /**
      * Registers a task under a name.
      * Can be any method, an async arrow function or a Promise

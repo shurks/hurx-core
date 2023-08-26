@@ -51,13 +51,18 @@
                 "apps": {
                     "$ref": "#/definitions/HurxConfigAppsPartial",
                     "description": "All distributed apps within the project"
+                },
+                "files": {
+                    "$ref": "#/definitions/HurxConfigFiles",
+                    "description": "Configuration of files"
                 }
             },
             "required": [
                 "name",
                 "version",
                 "env",
-                "apps"
+                "apps",
+                "files"
             ],
             "additionalProperties": false,
             "description": "A package in the hurx json file"
@@ -151,7 +156,6 @@
             },
             "required": [
                 "base",
-                "output",
                 "sources"
             ]
         },
@@ -393,6 +397,27 @@
                     "description": "The main entry point"
                 }
             }
+        },
+        "HurxConfigFiles": {
+            "type": "object",
+            "properties": {
+                "indents": {
+                    "type": "number",
+                    "description": "The amount of indentations at the start of a line."
+                },
+                "ignore": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "Files to add to gitignore"
+                }
+            },
+            "required": [
+                "ignore"
+            ],
+            "additionalProperties": false,
+            "description": "Configuration of files"
         }
     }
 }

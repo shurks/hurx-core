@@ -196,7 +196,7 @@ export type HurxPaths = Record<string, string> & HurxPathsBase & {
     /**
      * The output paths
      */
-    output?: HurxPathsBase
+    output: HurxPathsBase
 }
 
 export type HurxPathsPartial = Record<string, string> & HurxPathsBasePartial & {

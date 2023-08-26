@@ -1,8 +1,9 @@
 import objectPath from "object-path"
 import { HurxConfig, HurxConfigApp, HurxConfigApps, HurxConfigEnvironment } from "../hurx-json/hurx-json-file"
 import path from "path"
-import { readFileSync } from "fs"
+import { existsSync, readFileSync } from "fs"
 import Logger from "../../utils/logger"
+import Hurx from "../hurx"
 
 /**
  * A package.env.paths filepath containing an export name and function
@@ -46,11 +47,12 @@ export default class Env {
 
     /** 
      * Parse/merge the env from a hurx.json file
-     * @param hurxJSONFile the hurx.json file object
-     * @param root the path to the hurx json file
+     * @param root the path to the hurx json file (root of the project)
      * @returns the parsed/merged environment
      */
-    public static parse(hurxJSONFile: HurxConfig, root: string): HurxConfigEnvironment & { apps: HurxConfigApps } {
+    public static parse(root: string): Hurx['env'] {
+        const hurxJSONFile = JSON.parse(readFileSync(path.join(root, 'hurx.json')).toString('utf8')) as HurxConfig
+
         // Root is not an absolute path or "." / "./"
         if (root !== './' && !/^([a-zA-Z]:\\(?:[^\\]+\\)*[^\\]+)|(\/(?:[^\/]+\/)*[^\/]+)$/.test(root)) {
             throw Error(`Value of root must be a valid absolute path or ./ (value: "${root}")`)
@@ -58,14 +60,13 @@ export default class Env {
 
         // Assign from default
         let parsedEnv: { apps: HurxConfigApps } & HurxConfigEnvironment = {
-            ...process.env,
             ...hurxJSONFile.package.env.default,
             apps: {
                 bin: {}
             }
         }
 
-        const json = JSON.parse(readFileSync(path.join(__dirname, '../../../../../res', 'schemas', 'hurx.schema.json')).toString('utf8'))
+        const json = JSON.parse(readFileSync(path.join(__dirname, '../../../../res', 'schemas', 'hurx.schema.json')).toString('utf8'))
         const properties = Object.keys(json.definitions.HurxPaths.properties).filter((v) => json.definitions.HurxPaths.properties[v].type === 'string')
         const outputProperty: string = Object.keys(json.definitions.HurxPaths.properties).filter((v) => json.definitions.HurxPaths.properties[v].$ref?.endsWith('/HurxPathsBase'))[0]
         const allProperties = (hurxJSONFile.package.built ? [`paths`] : [`paths`, `paths.${outputProperty}`]).map((v) => properties.map((p) => `${v}.${p}`)).reduce((x, y) => [...x, ...y], [])
@@ -252,5 +253,74 @@ export default class Env {
             : './'
         
         return type
+    }
+
+    /**
+     * Finds the project configuration file
+     */
+    public static findProject = (_path: string): string|null => {
+        if (_path === path.parse(process.cwd()).root) {
+            return null
+        }
+        if (existsSync(path.join(_path, "hurx.json"))) {
+            return path.join(_path, 'hurx.json')
+        }
+        else if (existsSync(path.join(_path, "package.json"))) {
+            const project = this.findProject(path.join(_path, '../'))
+            if (!project) {
+                return path.join(_path, 'package.json')
+            }
+            else {
+                return project
+            }
+        }
+        else {
+            return this.findProject(path.join(_path, '../'))
+        }
+    }
+
+    /**
+     * Finds the framework configuration file
+     */
+    public static findFramework = (_path: string): string|null => {
+        if (_path === path.parse(process.cwd()).root) {
+            return null
+        }
+        const validateHurxJSON = (_path: string) => {
+            try {
+                const content = JSON.parse(readFileSync(path.join(_path, 'hurx.json')).toString('utf8')) as HurxConfig
+                if (content.package.name === '@hurx/core') {
+                    this.logger.verbose(`Found @hurx/core at ""`)
+                    return path.join(_path, 'hurx.json')
+                }
+            } catch (err) {
+                this.logger.verbose(`"${path.join(_path, 'hurx.json')}" is either invalid or not of this framework.`)
+                this.logger.verbose(err)
+            }
+            return null
+        }
+        if (existsSync(path.join(_path, "hurx.json"))) {
+            this.logger.verbose(`Found hurx.json at "${path.join(_path, 'hurx.json')}", checking if it's @hurx/core`)
+            const validate = validateHurxJSON(path.join(_path))
+            if (validate) {
+                this.logger.verbose(`Validated hurx.json`)
+                return validate
+            }
+            else {
+                this.logger.verbose(`Failed to validate hurx.json`)
+            }
+        }
+        if (existsSync(path.join(_path, "node_modules", "@hurx", "core", "hurx.json"))) {
+            this.logger.verbose(`Found hurx.json at "${path.join(_path, "node_modules", "@hurx", "core", "hurx.json")}", checking if it's @hurx/core`)
+            const validate = validateHurxJSON(path.join(_path, "node_modules", "@hurx", "core"))
+            if (validate) {
+                this.logger.verbose(`Validated hurx.json`)
+                return validate
+            }
+            else {
+                this.logger.verbose(`Failed to validate hurx.json`)
+            }
+        }
+        return this.findFramework(path.join(_path, '../'))
     }
 }

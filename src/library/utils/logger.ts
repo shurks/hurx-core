@@ -1,5 +1,6 @@
 import Color from "./theme/color"
 import chalk from 'chalk'
+import Theme from "./theme/theme"
 
 /**
  * The types of logger messages
@@ -12,16 +13,10 @@ export type LoggerMessageTypes = 'info' | 'warn' | 'success' | 'error' | 'trace'
  */
 export default class Logger {
     /**
-     * Colors
+     * Get the current theme colors
      */
-    public colors: Record<LoggerMessageTypes, string> = {
-        trace: '#1CFFA3',
-        info: '#3DB9FE',
-        debug: '#E7FF48',
-        verbose: '#FF601C',
-        warn: '#FED424',
-        error: '#FF3F66',
-        success: '#8CFE4B'
+    public get colors() {
+        return Theme.current.colors
     }
 
     /**
@@ -41,8 +36,8 @@ export default class Logger {
      * @param data any data
      */
     public label(type: LoggerMessageTypes, label: string, ...data: any[]) {
-        const convert = (d: any) => typeof d === 'string'
-            ? chalk.bgHex('#222222').hex(this.colors[type])(` ${label.substring(0, 1).toUpperCase()}${label.substring(1)} `) + chalk.bgHex(this.colors[type]).bold.hex('#222222')(` ${d} `)
+        const convert = (d: any) => ['string', 'number', 'boolean', 'bigint'].includes(typeof d)
+            ? chalk.bgHex('#222222').hex(this.colors[type])(` ${label.substring(0, 1).toUpperCase()}${label.substring(1)} `) + chalk.hex(this.colors[type]).bold.bgHex(this.colors.dark)(` ${d} `)
             : d
         this.perform({ type: type, label: label }, ...data.map((v) => convert(v)))
     }
@@ -52,8 +47,8 @@ export default class Logger {
      * @param data any data
      */
     public success(...data: any[]): void {
-        const convert = (d: any) => typeof d === 'string'
-            ? chalk.bgHex('#222222').hex(this.colors.success)(` Success `) + chalk.bgHex(this.colors.success).bold.hex('#222222')(` ${d} `)
+        const convert = (d: any) => ['string', 'number', 'boolean', 'bigint'].includes(typeof d)
+            ? chalk.bgHex('#222222').hex(this.colors.success)(` Success `) + chalk.hex(this.colors.success).bold.bgHex(this.colors.dark)(` ${d} `)
             : d
         this.perform({ type: 'success' }, ...data.map((v) => convert(v)))
     }
@@ -63,22 +58,21 @@ export default class Logger {
      * @param data any data
      */
     public warn(...data: any[]): void {
-        const convert = (d: any) => typeof d === 'string'
-            ? chalk.bgHex('#222222').hex(this.colors.warn)(` Warn `) + chalk.bgHex(this.colors.warn).bold.hex('#222222')(` ${d} `)
+        const convert = (d: any) => ['string', 'number', 'boolean', 'bigint'].includes(typeof d)
+            ? chalk.bgHex('#222222').hex(this.colors.warn)(` Warn `) + chalk.hex(this.colors.warn).bold.bgHex(this.colors.dark)(` ${d} `)
             : d
         this.perform({ type: 'warn' }, ...data.map((v) => convert(v)))
     }
 
     /**
      * Prints an error message for the clients to see
-     * TODO: prettify
      * @param data any data
      */
     public error(...data: any[]): void {
-        const convert = (d: any) => typeof d === 'string'
-            ? chalk.hex('#222222').bgHex(this.colors.error)(` Error `) + chalk.hex('#DDDDDD')(` ${d} `)
+        const convert = (d: any) => ['string', 'number', 'boolean', 'bigint'].includes(typeof d)
+            ? chalk.bold.bgHex('#222222').hex(this.colors.error)(` Error `) + chalk.bgHex(this.colors.dark).hex(this.colors.error).bold(` ${d} `)
             : d instanceof Error
-                ? chalk.hex('#222222').bgHex(this.colors.error)(` Error `) + chalk.hex('#DDDDDD')(` ${d.message} `) + (d.stack ? chalk.hex(this.colors.error)(`\n${d.stack.split(/\n|\r\n|\r/).filter((v, i) => i > 0).join('\n')} `) : '')
+                ? chalk.bold.bgHex('#222222').hex(this.colors.error)(` Error `) + chalk.bgHex(this.colors.dark).hex(this.colors.error).bold(` ${d.message} `) + (d.stack ? chalk.hex(this.colors.error)(`\n${d.stack.split(/\n|\r\n|\r/).filter((v, i) => i > 0).join('\n')} `) : '')
                 : d
         this.perform({ type: 'error' }, ...data.map((v) => convert(v)))
     }
@@ -88,8 +82,8 @@ export default class Logger {
      * @param data any data
      */
     public info(...data: any[]): void {
-        const convert = (d: any) => typeof d === 'string'
-            ? chalk.bgHex('#222222').hex(this.colors.info)(` Info `) + chalk.bgHex(this.colors.info).hex('#DDDDDD').bold(` ${d} `)
+        const convert = (d: any) => ['string', 'number', 'boolean', 'bigint'].includes(typeof d)
+            ? chalk.bgHex('#222222').hex(this.colors.info)(` Info `) + chalk.hex(this.colors.info).bold.bgHex(this.colors.dark)(` ${d} `)
             : d
         this.perform({ type: 'info' }, ...data.map((v) => convert(v)))
     }
@@ -100,8 +94,8 @@ export default class Logger {
      * @param data any data
      */
     public trace(...data: any[]): void {
-        const convert = (d: any) => typeof d === 'string'
-            ? chalk.bgHex('#222222').hex(this.colors.trace)(` Trace `) + chalk.bgHex(this.colors.trace).bold.hex('#222222')(` ${d} `)
+        const convert = (d: any) => ['string', 'number', 'boolean', 'bigint'].includes(typeof d)
+            ? chalk.bgHex('#222222').hex(this.colors.trace)(` Trace `) + chalk.hex(this.colors.trace).bold.bgHex(this.colors.dark)(` ${d} `)
             : d
         this.perform({ type: 'trace' }, ...data.map((v) => convert(v)))
     }
@@ -112,8 +106,8 @@ export default class Logger {
      * @param data any data
      */
     public debug(...data: any[]): void {
-        const convert = (d: any) => typeof d === 'string'
-            ? chalk.bgHex('#222222').hex(this.colors.debug)(` Debug `) + chalk.bgHex(this.colors.debug).bold.hex('#222222')(` ${d} `)
+        const convert = (d: any) => ['string', 'number', 'boolean', 'bigint'].includes(typeof d)
+            ? chalk.bgHex('#222222').hex(this.colors.debug)(` Debug `) + chalk.hex(this.colors.debug).bold.bgHex(this.colors.dark)(` ${d} `)
             : d
         this.perform({ type: 'debug' }, ...data.map((v) => convert(v)))
     }
@@ -124,8 +118,8 @@ export default class Logger {
      * @param data any data
      */
     public verbose(...data: any[]): void {
-        const convert = (d: any) => typeof d === 'string'
-            ? chalk.bgHex('#222222').hex(this.colors.verbose)(` Verbose `) + chalk.bgHex(this.colors.verbose).bold.hex('#222222')(` ${d} `)
+        const convert = (d: any) => ['string', 'number', 'boolean', 'bigint'].includes(typeof d)
+            ? chalk.bgHex('#222222').hex(this.colors.verbose)(` Verbose `) + chalk.hex(this.colors.verbose).bold.bgHex(this.colors.dark)(` ${d} `)
             : d
         this.perform({ type: 'verbose' }, ...data.map((v) => convert(v)))
     }
@@ -155,7 +149,7 @@ export default class Logger {
         }
         for (const d of data) {
             if (typeof d === 'string' || typeof d === 'boolean' || typeof d === 'number' || typeof d === 'bigint' || typeof d === 'function' || typeof d === 'symbol' || typeof d === 'undefined') {
-                console.log(`${d}`)
+                console.log(`${d} `)
             }
             else {
                 this.logObject(0, d, type, label)
@@ -171,13 +165,13 @@ export default class Logger {
      * @param string the string to check the amount of spaces in (optional)
      * @returns the shifted color in hue
      */
-    public getColor = (string: string = '') => {
+    public getColor = (type: keyof typeof this.colors, string: string = '') => {
         let match = string.match(/^\s*/)
         let level = 0
         if (match) {
             level += match[0].length / this.indentsPerLevel
         }
-        return this.getColorForLevel(level)
+        return this.getColorForLevel(type, level)
     }
 
     /**
@@ -186,8 +180,8 @@ export default class Logger {
      * @param string the string to check the amount of spaces in (optional)
      * @returns the shifted color in hue
      */
-    public getColorForLevel = (level: number) => {
-        return Color.changeHue('#BA5BFF', level * 12)
+    public getColorForLevel = (type: keyof typeof this.colors, level: number) => {
+        return Color.changeHue(this.colors[type], level * 12)
     }
 
     /**
@@ -208,12 +202,22 @@ export default class Logger {
                     }
                     seen.add(value)
                 }
+                // TODO: make this more detailed
+                // TODO: styling
+                if (typeof value === "function") {
+                    if (value.prototype && value.prototype.constructor === value) {
+                        return `[class ${value.name}]`
+                    }
+                    else {
+                        return `[function ${value.name}]`
+                    }
+                }
                 return value
             }
         }
         JSON.stringify(object, getCircularReplacer(), this.indentsPerLevel).replace(/^/, '\n').split('\n').forEach((v, i) => {
             // Get the level of the current line
-            const color = this.getColor(v)
+            const color = this.getColor(type, v)
 
             // Insert indentation based on level and json indents
             let objectLevel = 0
@@ -221,14 +225,14 @@ export default class Logger {
             if (match) {
                 objectLevel += Math.floor(match[0].length / this.indentsPerLevel)
             }
-
+            
             objectLevel += level
             v = new Array(level).fill(new Array(this.indentsPerLevel).fill(' ').join('')).join('') + v
-            v = v.replace(/^\s*(?=[0-9]|true|false|null|\"|\}|\{|\[|\])/, new Array(objectLevel).fill(objectLevel).map((v, i) => new Array(this.indentsPerLevel).fill('').map((v, j) => chalk.hex(this.getColorForLevel(i + (j / this.indentsPerLevel)))('.')).join('')).join(''))
+            v = v.replace(/^\s*(?=[0-9]|true|false|null|\"|\}|\{|\[|\])/, new Array(objectLevel).fill(objectLevel).map((v, i) => new Array(this.indentsPerLevel).fill('').map((v, j) => chalk.hex(this.getColorForLevel(type, i + (j / this.indentsPerLevel)))('.')).join('')).join(''))
 
             // Log the type
             if (i === 0) {
-                console.log(new Array(objectLevel).fill('').map((v, i) => new Array(this.indentsPerLevel).fill('').map((v, j) => chalk.hex(this.getColorForLevel(i + j / this.indentsPerLevel))('.')).join('')).join('') + chalk.bgHex('#222222').hex(this.colors[type])(` ${(label || type).substring(0, 1).toUpperCase() + (label || type).substring(1)} `) + chalk.hex('#222222').bold.bgHex(this.colors[type])(` ${typeof object} `))
+                console.log(new Array(objectLevel).fill('').map((v, i) => new Array(this.indentsPerLevel).fill('').map((v, j) => chalk.hex(this.getColorForLevel(type, i + j / this.indentsPerLevel))('.')).join('')).join('') + chalk.bgHex('#222222').hex(this.colors[type])(` ${type.toUpperCase()[0]}${type.toLowerCase().substring(1)} `) + chalk.bgHex(this.colors[type]).bold.hex(this.colors.dark)(` ${typeof object} `))
                 return
             }
 
