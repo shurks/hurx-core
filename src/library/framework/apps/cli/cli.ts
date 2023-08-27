@@ -772,7 +772,7 @@ export default class CLI<Name extends string = never, Options extends string = n
                                 throw Error(`Something went terribly wrong, trying to execute non-existing command`)
                             }
                             // Skip commands that are in deeper CLI's, which will
-                            // set the skip value. (See types.ts -> CLIMaster@convertToCommand)
+                            // set the skip value. 
                             if (!this.skip.includes(name)) {
                                 await this.executeCommand({
                                     command,

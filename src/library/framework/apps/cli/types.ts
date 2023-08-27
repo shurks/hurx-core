@@ -273,6 +273,10 @@ export abstract class CLICommand<Parent extends CLIMaster|CLICommand<any>> exten
     public readonly start = async() => {
         for (const command of this.commands || []) {
             const cmd = new command(this)
+            for (const command of this.commands || []) {
+                const cmd = new command(this)
+                await cmd.start()
+            }
             await cmd.start()
         }
     }
@@ -363,11 +367,15 @@ export abstract class CLIMaster extends CLIEntity {
                         const original = originalCLI()
                         original.skip = original.argv.filter((v, i, a) => i < original.argv.indexOf(this.cli.name) + this.cli.argv.length)
                         await runSpawnedProcess(`${path.join(Hurx.project.env.paths.sources, srcPath.replace(/\.ts$/g, '.js'))}`)
+                        original.argv = original.argv.filter((v, i, a) => i < a.indexOf(this.cli.name))
+                        original.history.push(original)
                     }
                     else {
                         const original = originalCLI()
                         original.skip = original.argv.filter((v, i, a) => i < original.argv.indexOf(this.cli.name) + this.cli.argv.length)
                         await runSpawnedProcess(`${path.join(Hurx.project.env.paths.sources, srcPath)}`)
+                        original.argv = original.argv.filter((v, i, a) => i < a.indexOf(this.cli.name))
+                        original.history.push(original)
                     }
                 })
             constructor(parent: any) {
