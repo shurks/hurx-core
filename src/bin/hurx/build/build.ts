@@ -1,23 +1,22 @@
 import child from 'child_process'
 import { Dirent, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "fs"
-import Command from "../../../library/framework/apps/cli/command"
-import { CLICommand } from "../../../library/framework/apps/cli/types"
 import Hurx from "../../../library/framework/hurx"
 import path from "path"
 import { HurxConfig, HurxPathsPartial } from "../../../library/framework/hurx-json/hurx-json-file"
 import Paths from "../../../library/utils/paths"
+import { CLICommand } from '../../../library/framework/apps/cli/types'
 import HurxCLI from '../hurx-cli'
+import Command from '../../../library/framework/apps/cli/command'
 
 /**
  * The build functionality
  * TODO: app names
  */
 export default class Build extends CLICommand<HurxCLI> {
-    public commands = []
     public command = new Command(this.parent, 'build', 'Builds your Hurx project based on hurx.json')
         .option('--app -a <name>', 'The name of the app(s) to build, split by a comma')
-        .event('start', async({options}) => {
-            this.logger.info(`Build started`)
+        .event('start', async({options, cli}) => {
+            cli.logger.info(`Build started`)
             
             // Paths
             const distPath = path.join(Hurx.project.env.paths.output.base)
@@ -75,7 +74,7 @@ export default class Build extends CLICommand<HurxCLI> {
                 mkdirSync(distPath, {
                     recursive: true
                 })
-                this.logger.verbose(`Made dist directory "${distPath}"`)
+                cli.logger.verbose(`Made dist directory "${distPath}"`)
             }
 
             // Make the .hurx/dist folder
@@ -83,7 +82,7 @@ export default class Build extends CLICommand<HurxCLI> {
                 mkdirSync(projectHurxDistPath, {
                     recursive: true
                 })
-                this.logger.verbose(`Made .hurx/dist directory "${projectHurxDistPath}"`)
+                cli.logger.verbose(`Made .hurx/dist directory "${projectHurxDistPath}"`)
             }
 
             // Make the .hurx/src folder
@@ -91,7 +90,7 @@ export default class Build extends CLICommand<HurxCLI> {
                 mkdirSync(projectHurxSourcePath, {
                     recursive: true
                 })
-                this.logger.verbose(`Made .hurx/src directory "${projectHurxSourcePath}"`)
+                cli.logger.verbose(`Made .hurx/src directory "${projectHurxSourcePath}"`)
             }
 
             // Create a tsconfig.json file
@@ -156,17 +155,19 @@ export default class Build extends CLICommand<HurxCLI> {
             }
             let packageJSONDistPath = path.join(Hurx.project.env.paths.output.base, 'package.json')
             writeFileSync(packageJSONDistPath, JSON.stringify(packageJSON, null, 4))
-            this.logger.verbose(`Created "${packageJSONDistPath}"`)
+            cli.logger.verbose(`Created "${packageJSONDistPath}"`)
             packageJSONDist = JSON.parse(readFileSync(packageJSONDistPath).toString('utf8'))
-            let dist = Hurx.project.env.paths.output.base
+            console.log(Hurx.project.env)
+            let dist = Paths.absoluteToRelative(Hurx.project.env.paths.base, Hurx.project.env.paths.output.base)
 
             // Convert the main property of package.json to dist
             if (packageJSONDist.main?.length) {
                 let main = Paths.relativeWithoutDotSlash(packageJSONDist.main || './')
-                main = Paths.relative(main.replace(dist, '').replace(/\.(ts|hurx)$/, '.js'))
+                console.log({main, dist})
+                main = Paths.relative(Paths.relativeWithoutDotSlash(main).replace(Paths.relativeWithoutDotSlash(dist), '').replace(/\.(ts|hurx)$/, '.js'))
                 packageJSONDist.main = main
                 writeFileSync(packageJSONDistPath, JSON.stringify(packageJSONDist, null, 4))
-                this.logger.verbose(`Modified "${packageJSONDistPath}" main`)
+                cli.logger.verbose(`Modified "${packageJSONDistPath}" main`)
             }
 
             // Check if there are any binary applications in package.json
@@ -175,16 +176,16 @@ export default class Build extends CLICommand<HurxCLI> {
                 for (const binName of Object.keys(packageJSONDist.bin)) {
                     const bin: string = packageJSONDist.bin[binName]
                     try {
-                        packageJSONDist.bin[binName] = Paths.relative(Paths.relativeWithoutDotSlash(bin).replace(dist, '').replace(/\.(ts|hurx)$/, '.js'))
+                        packageJSONDist.bin[binName] = Paths.relative(bin.replace(dist, '')).replace(/\.(ts|hurx)$/, '.js')
                         update = true
                     }
                     catch (err) {
-                        this.logger.error(err)
+                        cli.logger.error(err)
                     }
                 }
                 if (update) {
                     writeFileSync(packageJSONDistPath, JSON.stringify(packageJSONDist, null, 4))
-                    this.logger.verbose(`Modified "${packageJSONDistPath}" bin`)
+                    cli.logger.verbose(`Modified "${packageJSONDistPath}" bin`)
                 }
             }
 
@@ -194,15 +195,37 @@ export default class Build extends CLICommand<HurxCLI> {
                     const appEnv = Hurx.project.env.apps.bin[binName]
                     // Install the app
                     if (appEnv.npx) {
-                        this.logger.verbose(`Added binary app "${binName}" to package.json "bin"`)
+                        cli.logger.verbose(`Added binary app "${binName}" to package.json "bin"`)
+
                         packageJSONDist.bin = {
                             ...packageJSONDist.bin,
-                            [binName]: Paths.absoluteToRelative(Hurx.project.root, path.join(appEnv.paths.output!.sources!, appEnv.main.replace(/#.+$/g, ''))).replace(/\.(ts|hurx)$/, '.js')
+                            [binName]: Paths.absoluteToRelative(Hurx.project.env.paths.output.base, path.join(appEnv.paths.output!.sources!, appEnv.main.replace(/#.+$/g, ''))).replace(/\.(ts|hurx)$/, '.js')
                         }
                         writeFileSync(packageJSONDistPath, JSON.stringify(packageJSONDist, null, 4))
                     }
                 }
             }
+
+            /**
+             * Get a random alphanumeric character
+             */
+            function randomAlphanumericCharacter() {
+                const alphanumeric = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                const randomIndex = Math.floor(Math.random() * alphanumeric.length);
+                return alphanumeric.charAt(randomIndex);
+            }
+
+            // Create a temporary name for the new dist folder that doesn't exist 
+            const entries = readdirSync(projectHurxSourcePath, {
+                withFileTypes: true
+            })
+            let tempDistName: string = 'dist-'
+            let i = 0
+            do {
+                tempDistName += randomAlphanumericCharacter()
+                i ++
+            }
+            while (entries.map((v) => v.name).includes(tempDistName) || i < 6)
 
             // The tsconfig.json for the .hurx/src path
             const tsconfigHurxSrcPath = path.join(projectHurxSourcePath, 'tsconfig.json')
@@ -212,7 +235,7 @@ export default class Build extends CLICommand<HurxCLI> {
                     ...tsconfigJSON.compilerOptions || {},
                     rootDir: './',
                     rootDirs: undefined,
-                    outDir: '../dist'
+                    outDir: `./${tempDistName}`
                 },
                 include: [
                     './**/*.ts',
@@ -223,7 +246,7 @@ export default class Build extends CLICommand<HurxCLI> {
                 ]
             }
             writeFileSync(tsconfigHurxSrcPath, JSON.stringify(tsconfigHurxSrc, null, 4))
-            this.logger.verbose(`Added tsconfig at "${tsconfigHurxSrcPath}"`)
+            cli.logger.verbose(`Added tsconfig at "${tsconfigHurxSrcPath}"`)
 
             /**
              * Copies all files from one directory to another
@@ -251,16 +274,24 @@ export default class Build extends CLICommand<HurxCLI> {
             }
 
             // Copy src, res, and logs from src to dist
-            const paths = [[
-                Hurx.project.env.paths.sources, 
-                'src'
-            ], ...Hurx.project.env.paths.output.resources && Hurx.project.env.paths.resources ? [
-                Hurx.project.env.paths.resources, 
-                Paths.relativeWithoutDotSlash(Paths.absoluteToRelative(Hurx.project.root, Hurx.project.env.paths.output.resources)).replace(dist, '')
-            ] : [], Hurx.project.env.paths.output.logs && Hurx.project.env.paths.logs ? [
-                Hurx.project.env.paths.logs, 
-                Paths.relativeWithoutDotSlash(Paths.absoluteToRelative(Hurx.project.root, Hurx.project.env.paths.output.logs)).replace(dist, '')
-            ] : []]
+            const paths = [
+                [
+                    Hurx.project.env.paths.sources, 
+                    'src'
+                ],
+                [
+                    ...Hurx.project.env.paths.output.resources && Hurx.project.env.paths.resources ? [
+                        Hurx.project.env.paths.resources, 
+                        Paths.relativeWithoutDotSlash(Paths.absoluteToRelative(Hurx.project.root, Hurx.project.env.paths.output.resources)).replace(dist, '')
+                    ] : []
+                ], 
+                [
+                    ...Hurx.project.env.paths.output.logs && Hurx.project.env.paths.logs ? [
+                        Hurx.project.env.paths.logs, 
+                        Paths.relativeWithoutDotSlash(Paths.absoluteToRelative(Hurx.project.root, Hurx.project.env.paths.output.logs)).replace(dist, '')
+                    ] : []
+                ]
+            ]
             for (const _paths of paths) {
                 if (_paths[0] && _paths[1]) {
                     const _path = path.join(_paths[0])
@@ -271,38 +302,18 @@ export default class Build extends CLICommand<HurxCLI> {
                     }
                     else {
                         if (_paths[0] === Hurx.project.env.paths.sources) {
-                            this.logger.info(`No sources folder in project`)
+                            cli.logger.info(`No sources folder in project`)
                         }
                         else if (_paths[0] === Hurx.project.env.paths.resources) {
-                            this.logger.info(`No resources folder in project`)
+                            cli.logger.info(`No resources folder in project`)
                         }
                         else if (_paths[0] === Hurx.project.env.paths.logs) {
-                            this.logger.info(`No logs folder in project`)
+                            cli.logger.info(`No logs folder in project`)
                         }
                     }
                 }
             }
 
-            /**
-             * Get a random alphanumeric character
-             */
-            function randomAlphanumericCharacter() {
-                const alphanumeric = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-                const randomIndex = Math.floor(Math.random() * alphanumeric.length);
-                return alphanumeric.charAt(randomIndex);
-            }
-
-            // Create a temporary name for the new dist folder that doesn't exist 
-            const entries = readdirSync(projectHurxSourcePath, {
-                withFileTypes: true
-            })
-            let tempDistName: string = 'dist-'
-            let i = 0
-            do {
-                tempDistName += randomAlphanumericCharacter()
-                i ++
-            }
-            while (entries.map((v) => v.name).includes(tempDistName) || i < 6)
             writeFileSync(tsconfigHurxSrcPath, JSON.stringify({
                 ...tsconfigHurxSrc,
                 compilerOptions: {
@@ -346,20 +357,30 @@ export default class Build extends CLICommand<HurxCLI> {
             copyProjectRootFiles(projectHurxSourcePath)
 
             // Node modules in .hurx
-            this.logger.info(`Installing temporary node_modules`)
+            cli.logger.info(`Installing temporary node_modules`)
             let childProcess = child.execSync(`cd "${projectHurxSourcePath}" && npm i`, {
                 stdio: 'inherit'
             })
 
             // Compile typescript
-            this.logger.info(`Compiling temporary typescript project`)
+            cli.logger.info(`Compiling temporary typescript project`)
             childProcess = child.execSync(`cd "${projectHurxSourcePath}" && npx tsc`, {
                 stdio: 'inherit'
             })
 
             // Copy files to dist
-            this.logger.info(`Copying files to temporary project root`)
+            cli.logger.info(`Copying files to temporary project root`)
             copyProjectRootFiles(path.join(projectHurxSourcePath, tempDistName))
+            if (Hurx.project.env.paths.resources && Hurx.project.env.paths.output.resources && existsSync(Hurx.project.env.paths.resources)) {
+                copySourceFiles(readdirSync(Hurx.project.env.paths.resources, {
+                    withFileTypes: true
+                }), Hurx.project.env.paths.resources, path.join(projectHurxSourcePath, tempDistName, Paths.absoluteToRelative(Hurx.project.root, Hurx.project.env.paths.resources)))
+            }
+            if (Hurx.project.env.paths.logs && Hurx.project.env.paths.output.logs && existsSync(Hurx.project.env.paths.logs)) {
+                copySourceFiles(readdirSync(Hurx.project.env.paths.logs, {
+                    withFileTypes: true
+                }), Hurx.project.env.paths.logs, path.join(projectHurxSourcePath, tempDistName, Paths.absoluteToRelative(Hurx.project.root, Hurx.project.env.paths.logs)))
+            }
 
             // Copy all other files except ts and hurx from the temp source to temp dist
             const copyAllFilesExceptTSAndHurx = (_path: string) => {
@@ -378,7 +399,7 @@ export default class Build extends CLICommand<HurxCLI> {
                         copyAllFilesExceptTSAndHurx(path.join(_path, entry.name))
                     }
                     if (entry.isFile()) {
-                        if (!entry.name.endsWith('.ts')) {
+                        if (!entry.name.endsWith('.ts') && !entry.name.endsWith('.hurx')) {
                             copyFileSync(path.join(src, entry.name), path.join(dist, entry.name))
                         }
                     }
@@ -439,16 +460,6 @@ export default class Build extends CLICommand<HurxCLI> {
             modifyPathsInHurxJSONDist()
 
             // Complete
-            this.logger.success('Build complete')
+            cli.logger.success('Build complete')
         })
 }
-
-
-
-
-
-
-
-
-
-

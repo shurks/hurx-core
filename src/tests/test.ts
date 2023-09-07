@@ -1,13 +1,14 @@
 import Command from "../library/framework/apps/cli/command"
 import { CLICommand } from "../library/framework/apps/cli/types"
+import Hurx from "../library/framework/hurx"
 import Tests from "./tests"
 
 export class Test extends CLICommand<Tests> {
     public commands = []
     public command = new Command(this.parent, 'test', 'Some test command')
         .event('start', async({cli}) => {
-            const argv = cli.logger.argv
-            cli.logger.argv = ['--verbose']
+            const argv = Hurx.argv
+            Hurx.argv = ['--verbose']
             cli.logger.debug('Some textual data', {
                 data: 12
             })
@@ -30,6 +31,6 @@ export class Test extends CLICommand<Tests> {
             cli.logger.warn('Some textual data', {
                 data: 12
             })
-            cli.logger.argv = argv
+            Hurx.argv = argv
         })
 }

@@ -4,3 +4,4 @@ dist/
 .hurx/
 yarn.lock
 package-lock.json
+/res/frontend

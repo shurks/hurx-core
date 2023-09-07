@@ -1,4 +1,4 @@
-import CLI, { CLICommand, Command, CLIMaster, hurxCorePlugin } from "../cli"
+import CLI, { CLICommand, CLIMaster, Command, hurxCorePlugin } from '@hurx/core/cli'
 
 class SomeInnerCommand extends CLICommand<SomeInnerCLI> {
     public command = new Command(this.parent, 'some-command', 'This is some command in the inner cli')

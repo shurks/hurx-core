@@ -1,6 +1,8 @@
 import Color from "./theme/color"
 import chalk from 'chalk'
 import Theme from "./theme/theme"
+import Hurx from "../framework/hurx"
+import JSON from "./json"
 
 /**
  * The types of logger messages
@@ -27,7 +29,9 @@ export default class Logger {
     /**
      * The process.argv arguments used for this logger
      */
-    public argv: string[] = process.argv
+    public get argv(): string[] {
+        return Hurx.argv
+    }
 
     /**
      * Prints a message for the clients to see, except if the type
@@ -189,33 +193,10 @@ export default class Logger {
      * @param level the level of indentation the object should start at
      * @param object the object or array
      * @param type the type of level the message is for
+     * @param label TODO: log label
      */
     public logObject = (level: number, object: any, type: LoggerMessageTypes, label?: string) => {
-        // TODO: upgrade that circular works properly,
-        // if a node has a .parent, dont remove the .children from the node
-        const getCircularReplacer = () => {
-            const seen = new WeakSet()
-            return (key: any, value: any) => {
-                if (typeof value === "object" && value !== null) {
-                    if (seen.has(value)) {
-                        return "circular"
-                    }
-                    seen.add(value)
-                }
-                // TODO: make this more detailed
-                // TODO: styling
-                if (typeof value === "function") {
-                    if (value.prototype && value.prototype.constructor === value) {
-                        return `[class ${value.name}]`
-                    }
-                    else {
-                        return `[function ${value.name}]`
-                    }
-                }
-                return value
-            }
-        }
-        JSON.stringify(object, getCircularReplacer(), this.indentsPerLevel).replace(/^/, '\n').split('\n').forEach((v, i) => {
+        JSON.serialize(object, this.indentsPerLevel).replace(/^/, '\n').split('\n').forEach((v, i) => {
             // Get the level of the current line
             const color = this.getColor(type, v)
 

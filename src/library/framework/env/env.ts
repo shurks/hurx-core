@@ -66,7 +66,7 @@ export default class Env {
             }
         }
 
-        const json = JSON.parse(readFileSync(path.join(__dirname, '../../../../res', 'schemas', 'hurx.schema.json')).toString('utf8'))
+        const json = JSON.parse(readFileSync(path.join(Hurx.framework?.root || root, 'res', 'schemas', 'hurx.schema.json')).toString('utf8'))
         const properties = Object.keys(json.definitions.HurxPaths.properties).filter((v) => json.definitions.HurxPaths.properties[v].type === 'string')
         const outputProperty: string = Object.keys(json.definitions.HurxPaths.properties).filter((v) => json.definitions.HurxPaths.properties[v].$ref?.endsWith('/HurxPathsBase'))[0]
         const allProperties = (hurxJSONFile.package.built ? [`paths`] : [`paths`, `paths.${outputProperty}`]).map((v) => properties.map((p) => `${v}.${p}`)).reduce((x, y) => [...x, ...y], [])

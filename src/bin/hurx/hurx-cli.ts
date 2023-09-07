@@ -1,52 +1,49 @@
 import chalk from "chalk"
 import CLI from "../../library/framework/apps/cli/cli"
-import { CLIMaster } from "../../library/framework/apps/cli/types"
 import hurxCorePlugin from "../../library/framework/apps/cli/plugins/hurx-core-plugin"
+import { CLIMaster } from "../../library/framework/apps/cli/types"
 import Build from "./build/build"
-import Test from "./test"
 
 /**
  * The Hurx CLI
  */
 export default class HurxCLI extends CLIMaster {
     public commands = [
-        Build,
-        Test
+        Build
     ]
-
+    public masters = [
+        class AA extends CLIMaster {
+            cli = new CLI('aa', 'aaaa')
+                .plugin(hurxCorePlugin)
+                .event('start', async({cli}) => {
+                    cli.logger.info('Hello this is command "aa"')
+                })
+        }
+    ]
     public cli = new CLI('hurx', 'The Hurx CLI')
+        .option('--test -t <a>', 'AAA')
         .plugin(hurxCorePlugin)
-        .initialization('Hurx CLI initialization', async({next}) => {
+        .initialization('Hurx CLI initialization', async({next, cli, options}) => {
             // Generates the hurx art and renders it
             console.log(chalk.hex('#000000').bold(`\n${HurxCLI.generateAsciiArt()} ${chalk.bgHex('#FF601C').hex('#000000').bold(` v1.0.0 `)}\n`))
             
             // Check for support
             if (!process.stdin.isTTY) {
                 console.log()
-                this.logger.label('error', 'fatal', 'You are using a node environment that is incompatible (tty missing)')
+                cli.logger.label('error', 'fatal', 'You are using a node environment that is incompatible (tty missing)')
                 return
             }
-    
-            this.logger.info('Hurx CLI started')
+
+            cli.logger.info('Hurx CLI started')
             await next()
         })
         // The default start event
-        .event('start', async({cli}) => {
-            await cli.startContext({
-                context: {
-                    middleware: {
-                        name: 'Make -h break the program to show the user helpful instructions',
-                        argv: ['-h']
-                    }
-                }
-            })
+        .event('start', async({cli, options}) => {
+            if (!options.help) {
+                await cli.executeArgv('-h')
+            }
         })
-
-    /**
-     * Runs the Hurx CLI
-     */
-    public static readonly main = async() => await new HurxCLI().start()
-
+    
     /**
      * Generates 3D ascii art of 'HurX'
      * @returns the art

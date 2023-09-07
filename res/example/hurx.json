@@ -1,0 +1,70 @@
+{
+    "$schema": "./res/schemas/hurx.schema.json",
+    "package": {
+        "name": "@hurx/cli-example",
+        "version": "1.0.0",
+        "env": {
+            "npm": "production",
+            "git": "default",
+            "default": {
+                "paths": {
+                    "base": "",
+                    "sources": "src",
+                    "resources": "res",
+                    "logs": "logs",
+                    "output": {
+                        "base": "dist",
+                        "sources": "",
+                        "resources": "res",
+                        "logs": "logs"
+                    }
+                }
+            }
+        },
+        "files": {
+            "indents": 4,
+            "ignore": []
+        },
+        "apps": {
+            "bin": {
+                "hurx": {
+                    "default": {
+                        "npx": true,
+                        "args": [
+                            "--verbose"
+                        ],
+                        "paths": {
+                            "sources": "src/bin/hurx",
+                            "resources": "res/bin/hurx",
+                            "logs": "logs/bin/hurx",
+                            "output": {
+                                "sources": "bin/hurx",
+                                "resources": "res/bin/hurx",
+                                "logs": "logs/bin/hurx"
+                            }
+                        },
+                        "main": "index.ts#default.main"
+                    },
+                    "production": {
+                        "args": ["--test"]
+                    }
+                },
+                "textmate": {
+                    "default": {
+                        "paths": {
+                            "base": "",
+                            "sources": "src/bin/textmate",
+                            "resources": "res/bin/textmate",
+                            "output": {
+                                "sources": "bin/textmate",
+                                "resources": "res/bin/textmate",
+                                "logs": "logs/bin/textmate"
+                            }
+                        },
+                        "main": "index.ts#default.main"
+                    }
+                }
+            }
+        }
+    }
+}

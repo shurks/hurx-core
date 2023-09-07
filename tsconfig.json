@@ -5,13 +5,13 @@
             "node"
         ],
         "module": "commonjs",
-        "target": "ES2020",
+        "target": "es2020",
         "lib": [
-            "ES2020"
+            "ES2020",
+            "DOM"
         ],
         "sourceMap": true,
         "rootDir": "./src",
-        "resolveJsonModule": true,
         "esModuleInterop": true,
         "forceConsistentCasingInFileNames": true,
         "strict": true,
@@ -20,18 +20,27 @@
         "experimentalDecorators": true,
         "typeRoots": [
             "./node_modules/@types",
-            "src/library/engine/env/env.d.ts"
+            "./src/library/engine/env",
+            "./src"
         ],
         "outDir": "./dist",
         "declaration": true,
         "declarationDir": "./dist",
         "declarationMap": true,
-        "preserveSymlinks": true
+        "preserveSymlinks": true,
+        "jsx": "react",
+        "jsxFactory": "JSX.createVNode",
+        "jsxFragmentFactory": "JSX.createVNode"
     },
     "include": [
         "./src/**/*.ts",
-        "./src/**/*.d.ts"
-, "src/dev/bin.ts"    ],
+        "./src/**/*.tsx",
+        "./src/**/*.d.ts",
+        "./src/**/*.d.tsx"
+    ],
+    "ts-node": {
+        "files": true
+    },
     "exclude": [
         "node_modules",
         "dist"

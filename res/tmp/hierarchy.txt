@@ -1,8 +1,9 @@
 src
 ----bin/
---------cli/
+--------hurx/
+------------bin.ts
 ------------build/
-----------------hurx-build-command.ts
+----------------build.ts
 ------------hurx-cli.ts
 --------textmate/
 ------------index.ts
@@ -10,12 +11,12 @@ src
 ------------hurxc.ts
 ----dev/
 --------bin.ts
---------build.ts
 --------cli.ts
 --------hierarchy.ts
 --------index.ts
 --------schema.ts
 --------spawn.ts
+--------test.ts
 --------tests.ts
 ----library/
 --------framework/
@@ -35,6 +36,7 @@ src
 ----------------env.ts
 ------------hurx-json/
 ----------------hurx-json-file.ts
+------------hurx.ts
 --------textmate/
 ------------builder/
 ----------------index.ts

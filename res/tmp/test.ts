@@ -1,9 +1,9 @@
 import path from "path"
-import Command from "../../library/framework/apps/cli/command"
-import { CLICommand, CLIMaster } from "../../library/framework/apps/cli/types"
-import HurxCLI from "./hurx-cli"
-import CLI from "../../library/framework/apps/cli/cli"
-import hurxCorePlugin from "../../library/framework/apps/cli/plugins/hurx-core-plugin"
+import Command from "../../src/library/framework/apps/cli/command"
+import { CLICommand, CLIMaster } from "../../src/library/framework/apps/cli/types"
+import HurxCLI from "../../src/bin/hurx/hurx-cli"
+import CLI from "../../src/library/framework/apps/cli/cli"
+import hurxCorePlugin from "../../src/library/framework/apps/cli/plugins/hurx-core-plugin"
 
 export class AAA extends CLIMaster {
     public commands = []

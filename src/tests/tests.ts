@@ -53,6 +53,8 @@ export default class Tests extends CLIMaster {
         })
         .plugin(hurxCorePlugin)
         .event('start', async({cli, options}) => {
-            await cli.executeArgv('-h')
+            if (!options.help) {
+                await cli.executeArgv('-h')
+            }
         })
 }

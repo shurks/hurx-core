@@ -4,6 +4,7 @@ import Env from "./env/env"
 import { HurxConfig, HurxConfigApps, HurxConfigEnvironment } from "./hurx-json/hurx-json-file"
 import readline from 'readline'
 import { readFileSync } from "fs"
+import Emitter from "../utils/reactive/emitter"
 
 /**
  * The hurx master class
@@ -42,6 +43,41 @@ export default class Hurx {
     public env: HurxConfigEnvironment & { apps: HurxConfigApps }
 
     /**
+     * All event emitters
+     */
+    public static emitters = {
+        /**
+         * Emitter for the last argv
+         */
+        argv: {
+            /**
+             * The last argv has changed
+             */
+            changed: new Emitter<string[]>()
+        }
+    }
+
+    /**
+     * The last argv arguments
+     */
+    private static _argv: string[] = process.argv.filter((v, i) => i > 1)
+
+    /**
+     * Get the last argv arguments
+     */
+    public static get argv() {
+        return this._argv
+    }
+    
+    /**
+     * Sets the last argv arguments
+     */
+    public static set argv(argv: string[]) {
+        this.emitters.argv.changed.emit(argv)
+        this._argv = argv
+    }
+
+    /**
      * Constructs Hurx
      * @param root the project root
      * @param type the type of the project
@@ -55,6 +91,11 @@ export default class Hurx {
      * Initializes the Hurx framework
      */
     public static readonly initialize = async() => {
+        // Already initializerd
+        if (this.framework && this.project) {
+            return
+        }
+
         // Find framework root
         let hurx: string|null = null
         for (const _path of [process.argv[1], __dirname, process.cwd()]) {

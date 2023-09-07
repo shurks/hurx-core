@@ -1,0 +1,64 @@
+    /**
+     * Converts a master to a command
+     * @param srcPath the path of the file starting from the src folder
+     * @param originalCLI the original cli
+     * @returns the command class
+     */
+    // public convertToCommand(srcPath: string, originalCLI: () => CLI<any, any, any>) {
+    //     const cli = this.cli
+    //     return class _HurxCLI extends CLICommand<any> {
+    //         public commands = []
+    //         public command = new Command(this.parent, cli.name, cli.description)
+    //             .event('start', async () => {
+    //                 async function runSpawnedProcess(_path: string) {
+    //                     return new Promise<void>((resolve, reject) => {
+    //                         cli.logger.info({
+    //                             cli: originalCLI().argv.filter((v, i, a) => i > a.indexOf(cli.name))
+    //                         })
+    //                         const _child = child.spawn(
+    //                             'npx',
+    //                             [
+    //                                 'ts-node',
+    //                                 '--experimental-specifier-resolution=node',
+    //                                 _path,
+    //                                 ...originalCLI().argv.filter((v, i, a) => i > a.indexOf(cli.name))
+    //                             ], { 
+    //                                 cwd: process.cwd(),
+    //                                 stdio: 'inherit',
+    //                                 shell: true
+    //                             }
+    //                         )
+
+    //                         _child.on('exit', (code) => {
+    //                             if (code === 0) {
+    //                                 resolve() // Process completed successfully
+    //                             } else {
+    //                                 reject(new Error(`Child process exited with code ${code}`));
+    //                             }
+    //                         });
+
+    //                         _child.on('error', (err) => {
+    //                             reject(err) // An error occurred while spawning the child process
+    //                         })
+    //                     })
+    //                 }
+    //                 if (Hurx.project.config.package.built) {
+    //                     const original = originalCLI()
+    //                     original.skip = true
+    //                     await runSpawnedProcess(`${path.join(Hurx.project.env.paths.sources, srcPath.replace(/\.ts$/g, '.js'))}`)
+    //                     original.argv = original.argv.filter((v, i, a) => i < a.indexOf(this.cli.name))
+    //                     original.history.push(original)
+    //                 }
+    //                 else {
+    //                     const original = originalCLI()
+    //                     original.skip = true
+    //                     await runSpawnedProcess(`${path.join(Hurx.project.env.paths.sources, srcPath)}`)
+    //                     original.argv = original.argv.filter((v, i, a) => i < a.indexOf(this.cli.name))
+    //                     original.history.push(original)
+    //                 }
+    //             })
+    //         constructor(parent: any) {
+    //             super(parent)
+    //         }
+    //     }
+    // }

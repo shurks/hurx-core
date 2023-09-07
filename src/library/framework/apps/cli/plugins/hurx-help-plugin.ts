@@ -8,10 +8,10 @@ export default new CLI('hurx-help-plugin', 'Adds help functionality to your cli'
         if (options.help) {
             const command = cli.history[cli.history.length - 1] || cli
             const global = {
-                commands: command.allCommands.filter((v) => !command.commands.includes(v) || v === cli as any),
+                commands: command.allCommands.filter((v) => !command.commands.includes(v) || v === cli as any).map((v) => v.name).filter((v, i, a) => a.indexOf(v) === i).map((v) => command.allCommands.find((vv) => vv.name === v)!),
                 options: command.allOptions.filter((v) => !command.options.includes(v))
             }
-            const commands = command.commands.filter((v) => v !== cli as any && v !== cli.history[cli.history.length - 1])
+            const commands = command.commands.filter((v) => v !== cli as any && v !== cli.history[cli.history.length - 1]).map((v) => v.name).filter((v, i, a) => a.indexOf(v) === i).map((v) => command.commands.find((vv) => vv.name === v)!)
             const options = command.options
             const format = (option: string, description: string) => {
                 const suffix = new Array(Math.max(0, 30 - option.length)).fill('').map(v => ' ').join('')

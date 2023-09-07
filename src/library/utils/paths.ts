@@ -1,3 +1,6 @@
+import path from "path"
+
+// TODO: test thoroughly
 export default class Paths {
     /**
      * Adds a ./ to the start of a relative path
@@ -22,26 +25,29 @@ export default class Paths {
         if (!valid.test(_path)) {
             throw Error(`hurx.json: path "${_path}" is not a valid relative path`)
         }
-        return _path.replace(/^\.(\\|\/)+/g, '').replace(/^\//g, '')
+        return _path.replace(/^\.(\\|\/)+/g, '').replace(/^\//g, '').replace(/^(\/|\\)*/, '')
     }
 
     /**
      * Converts an absolute path to relative
-     * @param base the to remove
+     * @param base the base to remove
      * @param _path the path
      * @returns the relative path
      */
     public static absoluteToRelative(base: string, _path: string): string {
+        base = base.replace(/\\/g, '/')
+        _path = _path.replace(/\\/g, '/')
         const validAbsolute = /^([a-zA-Z]:\\(?:[^\\]+\\)*[^\\]+)|(\/(?:[^\/]+\/)*[^\/]+)$/
-        if (!validAbsolute.test(base)) {
+        if (!validAbsolute.test(base.replace(/\\|\//g, '/').replace(/\/$/, ''))) {
             throw Error(`Value "base" must be absolute. (value: "${base}")`)
         }
-        if (!validAbsolute.test(_path)) {
+        if (!validAbsolute.test(_path.replace(/\\|\//g, '/').replace(/\/$/, ''))) {
             throw Error(`Value "path" must be absolute. (value: "${_path}")`)
         }
         base = base.replace(/\\/g, '/')
         _path = _path.replace(/\\/g, '/')
         _path = _path.replace(base, '').replace(/(\\|\/)+/g, '/')
+        _path = _path.replace(/^\\|\//, '')
         const validRelative = /^(?!.*\/\/)([\w.-]+\/?)*$/
         if (!validRelative.test(_path)) {
             throw Error(`hurx.json: could not convert "${_path}" to relative by extracting the base: "${base}"`)

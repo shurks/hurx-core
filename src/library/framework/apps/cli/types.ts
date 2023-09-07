@@ -1,9 +1,7 @@
-import path from "path"
 import Logger from "../../../utils/logger"
 import Hurx from "../../hurx"
 import CLI from "./cli"
 import Command from "./command"
-import child from 'child_process'
 
 /**
  * The options property for a command
@@ -156,7 +154,7 @@ export type EventOptions<Name extends string, Options extends string, Middleware
     /**
      * The CLI instance associated with the event.
      */
-    cli: CLI<Name, Options, Middlewares>
+    cli: CLI<any, any, any>
 }
 
 /**
@@ -211,7 +209,48 @@ export abstract class CLIEntity implements CLIEntityBase {
      * The logger of the entity, providing access to logging functionality.
      */
     public get logger(): Logger {
-        return this.cli.logger
+        return Hurx.logger
+    }
+
+    /**
+     * Initializes this command or master (entity).
+     */
+    public readonly initialize = async(): Promise<this> => {
+        const initialize = async(root: CLICommand<any>|CLIMaster) => {
+            if (root instanceof CLIMaster || root instanceof CLICommand) {
+                for (const command of root.commands || []) {
+                    const cmd = new command(root)
+                    cmd.command.type = 'command'
+                    if (root instanceof CLIMaster) {
+                        root.cli.commands.push(cmd.command)
+                    }
+                    else {
+                        root.command.commands.push(cmd.command)
+                    }
+                    await initialize(cmd)
+                }
+            }
+            if (root instanceof CLIMaster) {
+                for (const master of root.masters) {
+                    const mst = new master()
+                    mst.cli.type = 'cli'
+                    mst.cli.parent = root.cli
+                    root.cli.commands.push(mst.cli)
+                    await initialize(mst)
+                }
+            }
+        }
+        await initialize(this as any)
+        return this as any
+    }
+
+    /**
+     * Starts the cli or command as a cli
+     * @param argv the arguments to pass to the cli
+     */
+    public readonly start = async(argv?: string[]): Promise<CLIMaster|CLICommand<any>> => {
+        await this.cli.start(argv)
+        return this as any
     }
 }
 
@@ -226,7 +265,7 @@ export abstract class CLICommand<Parent extends CLIMaster|CLICommand<any>> exten
      * List of sub-commands that this command can execute.
      * This should be an array of constructor functions for CLICommand classes.
      */
-    public abstract commands: (new (parent: any) => CLICommand<any>)[]
+    public commands: (new (parent: any) => CLICommand<any>)[] = []
 
     /**
      * The primary command that this CLICommand represents.
@@ -236,14 +275,16 @@ export abstract class CLICommand<Parent extends CLIMaster|CLICommand<any>> exten
     /**
      * Get the CLI
      */
-    public get cli() {
+    public get cli(): CLI<any, any, any> {
         const cli = () => {
             let parent = this.parent
             while (parent) {
                 if (parent instanceof CLIMaster) {
                     return parent.cli
                 }
-                parent = parent.parent
+                else if (parent instanceof CLICommand) {
+                    parent = parent.parent
+                }
             }
         }
         return cli()!
@@ -263,23 +304,6 @@ export abstract class CLICommand<Parent extends CLIMaster|CLICommand<any>> exten
         super()
         this.parent = parent
     }
-
-    /**
-     * Starts the execution of this command and its sub-commands.
-     * This method should be overridden to define the command's behavior.
-     *
-     * @async
-     */
-    public readonly start = async() => {
-        for (const command of this.commands || []) {
-            const cmd = new command(this)
-            for (const command of this.commands || []) {
-                const cmd = new command(this)
-                await cmd.start()
-            }
-            await cmd.start()
-        }
-    }
 }
 
 /**
@@ -291,96 +315,23 @@ export abstract class CLIMaster extends CLIEntity {
      * List of CLI commands that can be executed by this master.
      * This should be an array of constructor functions for CLICommand classes.
      */
-    public abstract commands: (new (parent: any) => CLICommand<any>)[]
+    public commands: (new (parent: any) => CLICommand<any>)[] = []
 
     /**
-     * The main CLI instance associated with this master.
+     * The sub-cli's within this cli master entity.
      */
-    public abstract cli: CLI<any, any, any>
+    public masters: (new () => CLIMaster)[] = []
+
+    /**
+     * The CLI associated with this master entity.
+     */
+    public abstract readonly cli: CLI<any, any, any>
 
     /**
      * Creates a new instance of CLIMaster.
+     * @param cli The main CLI instance associated with this master.
      */
     constructor() {
         super()
-    }
-
-    /**
-     * Starts the execution of this master and its associated CLI.
-     * This method initializes and executes the defined commands.
-     *
-     * @async
-     */
-    public readonly start = async() => {
-        this.cli.emitters.change.argv.listen.always(async(argv) => {
-            this.logger.argv = argv
-        })
-        for (const command of this.commands || []) {
-            const cmd = new command(this)
-            await cmd.start()
-        }
-        await this.cli.start()
-    }
-
-    /**
-     * Converts a master to a command
-     * @param srcPath the path of the file starting from the src folder
-     * @param originalCLI the original cli
-     * @returns the command class
-     */
-    public convertToCommand(srcPath: string, originalCLI: () => CLI<any, any, any>) {
-        const cli = this.cli
-        return class _HurxCLI extends CLICommand<any> {
-            public commands = []
-            public command = new Command(this.parent, cli.name, cli.description)
-                .event('start', async () => {
-                    async function runSpawnedProcess(_path: string) {
-                        return new Promise<void>((resolve, reject) => {
-                            const _child = child.spawn(
-                                'npx',
-                                [
-                                    'ts-node',
-                                    '--experimental-specifier-resolution=node',
-                                    _path,
-                                    ...originalCLI().argv.filter((v, i, a) => i > a.indexOf(cli.name))
-                                ], { 
-                                    cwd: process.cwd(),
-                                    stdio: 'inherit',
-                                    shell: true
-                                }
-                            )
-
-                            _child.on('exit', (code) => {
-                                if (code === 0) {
-                                    resolve() // Process completed successfully
-                                } else {
-                                    reject(new Error(`Child process exited with code ${code}`));
-                                }
-                            });
-
-                            _child.on('error', (err) => {
-                                reject(err) // An error occurred while spawning the child process
-                            })
-                        })
-                    }
-                    if (Hurx.project.config.package.built) {
-                        const original = originalCLI()
-                        original.skip = original.argv.filter((v, i, a) => i < original.argv.indexOf(this.cli.name) + this.cli.argv.length)
-                        await runSpawnedProcess(`${path.join(Hurx.project.env.paths.sources, srcPath.replace(/\.ts$/g, '.js'))}`)
-                        original.argv = original.argv.filter((v, i, a) => i < a.indexOf(this.cli.name))
-                        original.history.push(original)
-                    }
-                    else {
-                        const original = originalCLI()
-                        original.skip = original.argv.filter((v, i, a) => i < original.argv.indexOf(this.cli.name) + this.cli.argv.length)
-                        await runSpawnedProcess(`${path.join(Hurx.project.env.paths.sources, srcPath)}`)
-                        original.argv = original.argv.filter((v, i, a) => i < a.indexOf(this.cli.name))
-                        original.history.push(original)
-                    }
-                })
-            constructor(parent: any) {
-                super(parent)
-            }
-        }
     }
 }

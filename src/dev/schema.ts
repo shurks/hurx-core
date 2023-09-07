@@ -1,15 +1,15 @@
 import { writeFileSync } from 'fs'
 import path from 'path'
 import * as tsj from 'ts-json-schema-generator'
-import { CLICommand } from '../library/framework/apps/cli/types'
+import CLI from '../library/framework/apps/cli/cli'
 import Dev from '.'
+import { CLICommand } from '../library/framework/apps/cli/types'
 import Command from '../library/framework/apps/cli/command'
 
 /**
  * The schema command
  */
 export default class Schema extends CLICommand<Dev> {
-    public commands = []
     public command = new Command(this.parent, 'schema', 'Generates a JSON schema for the hurx.json file')
         .event('start', async({cli}) => {
             const schema = tsj.createGenerator({

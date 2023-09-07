@@ -1,6 +1,5 @@
-import Logger from "../../../utils/logger"
-import Emitter from "../../../utils/reactive/emitter"
-import { Option, Events, EventHandler, CommandOptions, MiddlewareOptions } from "./types"
+import Hurx from "../../hurx"
+import { Option, Events, EventHandler, CommandOptions, MiddlewareOptions, CLICommand, CLIMaster } from "./types"
 
 /**
  * The options for the start loop
@@ -25,25 +24,15 @@ type LoopOptions = {
  */
 export default class CLI<Name extends string = never, Options extends string = never, Middlewares extends string = never> {
     /**
-     * All event emitters
-     */
-    public emitters = {
-        /**
-         * Emitters for on change
-         */
-        change: {
-            /**
-             * Emitter for when the argv property changes
-             */
-            argv: new Emitter<typeof this.argv>()
-        }
-    }
-
-    /**
      * The parent CLI instance.
      * @type {CLI|undefined}
      */
     public parent?: CLI<any, any, any> = undefined
+
+    /**
+     * The type of CLI
+     */
+    public type: 'command'|'cli' = 'command'
 
     /**
      * An array of defined options for this CLI instance.
@@ -56,9 +45,9 @@ export default class CLI<Name extends string = never, Options extends string = n
      * @type {Array<Option>}
      */
     public get allOptions(): typeof this['options'] {
-        let parent = this.history[this.history.length - 1].parent
+        let parent: CLI<any, any, any> | undefined = this.history[this.history.length - 1].parent
         let options: typeof this['options'] = [
-            ...this.history[this.history.length - 1].options
+            ...this.options
         ]
         while (parent && parent !== this) {
             options = [
@@ -99,6 +88,11 @@ export default class CLI<Name extends string = never, Options extends string = n
     }
 
     /**
+     * What has been executed of this cli
+     */
+    public executed: Array<'initialization'|'middleware'|'command'> = []
+
+    /**
      * The event handlers
      */
     public handlers: {[E in Events]: EventHandler<E, Name, Options, Middlewares> | undefined} = {} as any
@@ -118,7 +112,7 @@ export default class CLI<Name extends string = never, Options extends string = n
     /**
      * Arguments to skip
      */
-    public skip: string[] = []
+    public skip: boolean = false
 
     /**
      * All the registered middleware functions
@@ -147,26 +141,14 @@ export default class CLI<Name extends string = never, Options extends string = n
     /**
      * The last options
      */
-    private get lastOptions(): CommandOptions<Options> {
-        const options = {} as any
-        for (const option of this.allOptions) {
-            if (option.included) {
-                options[option.long] = {}
-                for (const propertyName of Object.keys(option.properties)) {
-                    const property = option.properties[propertyName]
-                    if (property.value !== undefined) {
-                        options[option.long][propertyName] = property.value
-                    }
-                }
-            }
-        }
-        return options
-    }
+    private lastOptions: CommandOptions<Options> = {} as any
 
     /**
      * The logger instance used for logging messages.
      */
-    public logger = new Logger()
+    public get logger() {
+        return Hurx.logger
+    }
 
     /**
      * Creates an instance of the CLI class.
@@ -226,7 +208,7 @@ export default class CLI<Name extends string = never, Options extends string = n
     public plugin<N extends string, O extends string, M extends string>(cli: CLI<N, O, M>): CLI<Name, Options|O, Middlewares|M> {
         this.commands.push(...cli.commands.filter((v) => !this.commands.map((v) => v.name).includes(v.name) && v.name !== cli.name))
         this.options.push(...cli.options.filter((v) => !this.options.map((v) => v.long).includes(v.long) && (!v.short || !this.options.filter((v) => v.short).map((v) => v.short).includes(v.short))))
-        this.middlewares.push(...cli.middlewares as any[])
+        this.middlewares.push(...cli.middlewares.filter((v) => !this.middlewares.map((v) => v.name).includes(v.name as any)) as any[])
         for (const handler of Object.keys(cli.handlers)) {
             if ((cli.handlers as any)[handler] && !(this.handlers as any)[handler]) {
                 (this.handlers as any)[handler] = (cli.handlers as any)[handler]
@@ -353,97 +335,55 @@ export default class CLI<Name extends string = never, Options extends string = n
 
     /**
      * Executes the given arguments in the CLI, the arguments are appended
-     * to the arguments of `this.start`.
+     * to the arguments of `this.start`. Initializations are skipped.
      * @param argv the arguments
      */
     public async executeArgv(...argv: string[]) {
-        return await this.start([...this.argv, ...argv])
+        const nodes: Array<[typeof this, typeof this.executed]> = []
+        for (let i = this.history.length - 1; i >= 0; i --) {
+            let history = this.history[i]
+            let parent: typeof history.parent = history
+            while (parent) {
+                nodes.push([parent as this, [...parent.executed]])
+                parent.executed = []
+                parent = parent.parent
+            }
+        }
+        const lastCommand = this.history[this.history.length - 1]
+        const lastCommandExecuted = [...lastCommand.executed]
+        lastCommand.executed = ['initialization', 'command']
+        const cli = await lastCommand.start([...Hurx.argv, ...argv])
+        for (const [parent, executed] of nodes) {
+            parent.executed = executed
+        }
+        lastCommand.executed = [...lastCommandExecuted]
+        return cli
     }
 
     /**
      * Stars the CLI based on a certain context and command-line arguments
-     * @param options the options
      * @param argv the arguments
+     * @param startOptions the options
      */
-    public startContext = async(config: {
-        /**
-         * The context to run, there can only be one and there has to be one specified.
-         */
-        context: {
-            /**
-             * Starts a middleware
-             */
-            middleware?: {
-                /**
-                 * The current middleware, if any
-                 */
-                current?: Middlewares
-                /**
-                 * Name of the middleware to run
-                 */
-                name: Middlewares
-                /**
-                 * The arguments, will throw an error if there are commands in there.
-                 */
-                argv: string[]
-                /**
-                 * Whether to include the last argv in the arguments
-                 */
-                includeLastArgv?: boolean
-                /**
-                 * Whether to include commands in the current/last argv values
-                 */
-                includeCommands?: 'last' | 'current' | 'both'
-            }
-            /**
-             * Starts a command based on arguments
-             */
-            argv?: {
-                argv: string[]
-            }
-        }
-    }) => {
+    public start = async(argv: string[] = process.argv.filter((v, i) => i > 1)) => {
         return new Promise<this>(async(resolve, reject) => {
             try {
-                // Checks if there is exactly 1 context
-                if (Object.keys(config.context).length !== 1) {
-                    if (Object.keys(config.context).length === 0) {
-                        throw Error(`There has to be one context specified in the config of the startContext function.`)
-                    }
-                    else {
-                        throw Error(`There cannot be more than one context specified in the config of the startContext function.`)
-                    }
-                }
-                
-                this.logger.trace(`Starting context: "${Object.keys(config.context)[0]}"`)
-                if (config.context.middleware) {
-                    if (!this.middlewares.find((v) => v.name === config.context.middleware!.name && !v.initialization)) {
-                        throw Error(`There's no middleware by the name of "${config.context.middleware}" in CLI "${this.name}"`)
-                    }
-                    this.currentMiddleware = config.context.middleware.current || null
-                }
+                this.logger.verbose(`Starting context`)
 
                 // Set the argv
-                const lastArgv = this.argv
-                let argv = [
-                    ...config.context.middleware
-                        ? config.context.middleware.argv
-                        : config.context.argv
-                            ? config.context.argv.argv
-                            : []
-                ].filter(Boolean)
+                const lastArgv = Hurx.argv
+                argv = argv.filter(Boolean)
 
                 // Include the last argv if its asked for, by default
                 // a middleware won't use the last argv.
-                if (config.context.middleware?.includeLastArgv || !argv.filter(Boolean).length) {
-                    argv = [...lastArgv, ...argv]
+                if (!argv.filter(Boolean).length) {
+                    argv = [...lastArgv]
                 }
 
                 // Only saves the argv when there are arguments
                 // Set the argv, or reruns the same argv if it's empty
-                if (argv.length) {
-                    this.argv = [...argv]
-                    await this.emitters.change.argv.emit(this.argv)
+                else {
+                    Hurx.argv = [...argv]
                 }
 
                 // TRACE the args
@@ -453,25 +393,22 @@ export default class CLI<Name extends string = never, Options extends string = n
                 })
                 
                 // Reset the last options
-                if (!config.context.middleware || !config.context.middleware.includeLastArgv) {
-                    for (const option of this.allOptions) {
-                        if (option.included) {
-                            for (const propertyName of Object.keys(option.properties)) {
-                                option.properties[propertyName].value = undefined
-                            }
-                            option.included = false
+                for (const option of this.allOptions) {
+                    if (option.included) {
+                        for (const propertyName of Object.keys(option.properties)) {
+                            option.properties[propertyName].value = undefined
                         }
+                        option.included = false
                     }
                 }
 
                 // Whether a command has been found or not so far
                 let oneCommandFound = false
 
-                // The executed commands
-                let commandsToExecute: string[] = []
 
                 // All the options that are found based on the arguments
                 let options: typeof this.history[number]['options'] = []
+                let lastOptions: typeof this.history[number]['options'] = []
 
                 // Whether or not the initialization function has succeeded,
                 // in other words; the next() function has been called
@@ -512,7 +449,7 @@ export default class CLI<Name extends string = never, Options extends string = n
                 }
 
                 // Loops through the argv arguments
-                const loop = async(loopOptions: LoopOptions) => {
+                const loop = async(loopOptions: LoopOptions): Promise<number> => {
                     loop: for (let i = 0; i < argv.length; i ++) {
                         let arg = argv[i]
                         // It's an option
@@ -524,7 +461,7 @@ export default class CLI<Name extends string = never, Options extends string = n
                                         this.logger.verbose(`Found short combo "${arg}"`)
                                         const letters = arg.replace(found.short, '').replace('-', '')
                                         const parsed: string[] = [found.short]
-                                        options = [found]
+                                        options = [...options, found]
                                         found.included = true
                                         for (const letter of letters) {
                                             if (parsed.includes(letter.toLowerCase())) {
@@ -545,13 +482,13 @@ export default class CLI<Name extends string = never, Options extends string = n
                                     }
                                     else {
                                         this.logger.verbose(`Found short option: "${arg}"`)
-                                        options = [found]
+                                        options = [...options, found]
                                         found.included = true
                                     }
                                 }
                                 else if (arg.startsWith('--')) {
                                     this.logger.verbose(`Found option: "${arg}"`)
-                                    options = [found]
+                                    options = [...options, found]
                                     found.included = true
                                 }
                             }
@@ -575,33 +512,26 @@ export default class CLI<Name extends string = never, Options extends string = n
                         }
                         // It's a command
                         else {
-                            if (config.context.middleware) {
-                                if (!config.context.middleware.includeCommands) {
-                                    this.logger.verbose('BREAK')
-                                    continue loop
-                                }
-                                else if (config.context.middleware.includeCommands !== 'both') {
-                                    if (config.context.middleware.includeCommands === 'current') {
-                                        if (config.context.middleware.includeLastArgv && i < lastArgv.length) {
-                                            i = lastArgv.length - 1
-                                            continue loop
-                                        }
-                                    }
-                                    else if (config.context.middleware.includeCommands === 'last') {
-                                        if (config.context.middleware.includeLastArgv && i >= lastArgv.length) {
-                                            continue loop
-                                        }
-                                    }
-                                }
-                            }
-                            let found = this.history[this.history.length - 1].allCommands.find((v) => v.name === argv[i])
+                            const last = this.history[this.history.length - 1] || this
+                            let found = last.allCommands.find((v) => v.name === argv[i])
                             if (found) {
+                                if (last !== found) {
+                                    found.parent = last
+                                }
                                 this.history.push(found)
+                            }
+                            if (loopOptions.ignoreCommands) {
+                                return i
+                            }
+                            if (found) {
                                 while (found) {
                                     i++
                                     found = found.commands.find((v) => v.name === argv[i])
                                     if (found) {
                                         arg = argv[i]
+                                        if (last !== found) {
+                                            found.parent = this.history[this.history.length - 1]
+                                        }
                                         this.history.push(found)
                                     }
                                 }
@@ -609,18 +539,23 @@ export default class CLI<Name extends string = never, Options extends string = n
                                 found = this.history[this.history.length - 1]
                                 this.logger.verbose(`Found command: "${arg}"`)
                                 if (oneCommandFound) {
-                                    const lastCommand = this.history[this.history.length - 1]
+                                    const lastCommand = this.history[this.history.length - 2]
                                     if (lastCommand) {
                                         this.logger.trace(`First executing previous command "${lastCommand.name}"`)
+                                        // Checks whether the initialization and middleware commands have succeeded
                                         if (succeeded) {
-                                            if (loopOptions.ignoreCommands) {
-                                                continue loop
+                                            // Ignore the commands or type is cli, break the loop
+                                            if (loopOptions.ignoreCommands || lastCommand.type === 'cli') {
+                                                return i
                                             }
-                                            // await this.executeCommand({
-                                            //     command: lastCommand,
-                                            //     execute: ['command']
-                                            // })
-                                            commandsToExecute.push(lastCommand.name)
+                                            // Last command was of type "command", so execute it
+                                            else {
+                                                await lastCommand.executeCommand({
+                                                    execute: ['command']
+                                                })
+                                                this.lastOptions = {} as any
+                                                lastOptions = []
+                                            }
                                         }
                                     }
                                 }
@@ -630,7 +565,6 @@ export default class CLI<Name extends string = never, Options extends string = n
                                 if (!arg.startsWith('-')) {
                                     throw new Error(`No definition for command "${arg}" could be found`)
                                 }
-                                return
                             }
                         }
                         // There are options that are currently active and are awaiting
@@ -724,84 +658,80 @@ export default class CLI<Name extends string = never, Options extends string = n
                                 }
                                 break
                             }
+                            const _options = {} as any
+                            for (const option of options) {
+                                if (option.included) {
+                                    _options[option.long] = {}
+                                    for (const propertyName of Object.keys(option.properties)) {
+                                        const property = option.properties[propertyName]
+                                        if (property.value !== undefined) {
+                                            _options[option.long][propertyName] = property.value
+                                        }
+                                    }
+                                }
+                            }
+                            this.lastOptions = {...this.lastOptions, ..._options}
+                            lastOptions = [...lastOptions, ...options]
                             options = []
                         }
                     }
-                }
-
-                // Execute the middleware of the cli
-                if (config.context.argv) {
-                    // Find all options, but skip commands
-                    await loop({
-                        ignoreCommands: true,
-                        ignoreIncompleteOptions: true
-                    })
-                    // Store the succeeded variable
-                    this.logger.trace(`Firing initializations`)
-                    succeeded = await this.executeCommand({
-                        command: this,
-                        execute: ['initialization']
-                    })
-                }
-
-                // Start finding commands and options
-                await loop({})
-                
-                // Finish up when the context is arguments
-                if (config.context.argv) {
-                    // Fire the middleware
-                    this.logger.trace(`Firing middleware at end of function`)
-                    if (succeeded) {
-                        succeeded = await this.executeCommand({
-                            command: this,
-                            execute: ['middleware']
-                        })
-                    }
-
-                    // Skips the middleware if the initialization failed
-                    if (succeeded) {
-                        // Fire the command if not done already
-                        const lastCommand = this.history[this.history.length - 1] || this
-                        if (!commandsToExecute.includes(lastCommand.name)) {
-                            commandsToExecute.push(lastCommand.name)
-                        }
-                        // Execute all commands
-                        for (const name of commandsToExecute) {
-                            const command = (lastCommand || this).allCommands.find((v) => v.name === name)
-                            if (!command) {
-                                throw Error(`Something went terribly wrong, trying to execute non-existing command`)
-                            }
-                            // Skip commands that are in deeper CLI's, which will
-                            // set the skip value. 
-                            if (!this.skip.includes(name)) {
-                                await this.executeCommand({
-                                    command,
-                                    execute: ['command']
-                                })
-                            }
-                        }
-                        // Reset skip
-                        this.skip = []
-                    }
-                }
-
-                // When its middleware
-                else if (config.context.middleware) {
-                    if (succeeded) {
-                        const middleware = this.middlewares.find((v) => v.name === config.context.middleware!.name && !v.initialization)
-                        if (middleware) {
-                            await middleware.cb({
-                                cli: this,
-                                options: this.lastOptions,
-                                next: async() => {
-                                    this.argv = lastArgv
-                                    this.currentMiddleware = null
+                    const _options = {} as any
+                    const lastCommand = this.history[this.history.length - 1]
+                    if (lastCommand && !lastCommand.executed.includes('command')) {
+                        for (const option of lastOptions) {
+                            if (option.included) {
+                                _options[option.long] = {}
+                                for (const propertyName of Object.keys(option.properties)) {
+                                    const property = option.properties[propertyName]
+                                    if (property.value !== undefined) {
+                                        _options[option.long][propertyName] = property.value
+                                    }
                                 }
-                            })
-                            return resolve(this)
+                            }
                         }
-                        else {
-                            throw Error(`Something went terribly wrong, this check should already be done at the start of the function!!!`)
+                        this.lastOptions = {...this.lastOptions, ..._options}
+                        // Execute the last command found if it didnt happen already, and if it isn't of type CLI
+                        if (!loopOptions.ignoreCommands && lastCommand.type !== 'cli' && !lastCommand.executed.includes('command')) {
+                            // Run the command
+                            lastCommand.argv = []
+                            await lastCommand.executeCommand({
+                                execute: ['command']
+                            })
+                        }
+                    }
+                    return argv.length - 1
+                }
+
+                // Find all options, but skip commands
+                const index = await loop({
+                    ignoreCommands: true,
+                    ignoreIncompleteOptions: true
+                })
+
+                // Find the last command
+                const lastCommand = this.history[this.history.length - 1]
+                
+                // Run the nested CLI
+                if (lastCommand.type === 'cli') {
+                    if (lastCommand !== this) {
+                        lastCommand.argv = argv.filter((v, j) => j > index)
+                        this.argv = argv.filter((v, j) => j <= index)
+                        await lastCommand.start(lastCommand.argv)
+                    }
+                }
+
+                // Run the command
+                else {
+                    const pass = await this.executeCommand({
+                        execute: ['initialization', 'middleware']
+                    })
+                    if (pass) {
+                        await lastCommand.executeCommand({
+                            execute: ['command']
+                        })
+                        const argv2 = argv.filter((v, j) => j > index)
+                        if (argv2.length) {
+                            await this.start(argv2)
                         }
                     }
                 }
@@ -816,9 +746,6 @@ export default class CLI<Name extends string = never, Options extends string = n
                     })
                     if (handle instanceof Promise) {
                         await handle
-                    }
-                    if (!config.context.argv) {
-                        return resolve(this)
                     }
                 }
                 else {
@@ -857,88 +784,106 @@ export default class CLI<Name extends string = never, Options extends string = n
     }
 
     /**
-     * Starts the CLI with the specified command-line arguments.
-     * @param {string[]} [argv=process.argv] The command-line arguments, make sure not to include the first two
-     *                                       entries of node.js if using process.argv
-     */
-    public async start(argv: string[] = process.argv.filter((v, i) => i > 1)) {
-        await this.startContext({ context: { argv: { argv } } })
-    }
-
-    /**
      * Executes a command
      * @param command the command to execute
      * @return {boolean} false if the next() function has NOT been called in case of middlewares or initializations, otherwise true
      */
     private executeCommand = async(config: {
-        command: CLI<any, any, any>,
         execute: ('middleware'|'initialization'|'command')[]
     }): Promise<boolean> => {
         const {
-            command,
             execute
         } = config
-        if (!command.handlers.start) {
-            this.logger.info(`Command "${command.name}" has no "start" event specified`)
+        const command = this
+        if (execute.filter((v) => !command.executed.includes(v)).length === 0) {
+            return true
         }
-        const runCommand = async() => {
-            this.logger.verbose(`Running command "${command.name}" start event`)
-            if (command.handlers.start) {
+        if (!execute.length) {
+            return true
+        }
+        if (!command.handlers.start) {
+            command.logger.info(`Command "${command.name}" has no "start" event specified`)
+        }
+        const runCommand = async(command: CLI<any, any, any>) => {
+            const includes = command.executed.includes('command')
+            if (command.handlers.start && !includes) {
+                command.logger.verbose(`Running command "${command.name}" start event`)
                 await command.handlers.start({
-                    cli: this,
-                    options: this.lastOptions
+                    cli: command,
+                    options: command.lastOptions
                 })
+                command.executed.push('command')
             }
         }
         if (execute.includes('middleware') || execute.includes('initialization')) {
-            let middlewares: typeof this.middlewares = []
+            let middlewares: Array<[typeof this, CLI<any, any, any>['middlewares']]> = []
+            let initializations: Array<[typeof this, CLI<any, any, any>['middlewares']]> = []
             let parent: CLI<any, any, any>|undefined = command
             let nextHasBeenCalled = false
             while (parent) {
-                middlewares = [...(parent.middlewares || []), ...middlewares].filter((m) => m.name !== this.currentMiddleware && (execute.includes('initialization') || !m.initialization))
-                if (!execute.includes('middleware')) {
-                    middlewares = middlewares.filter((v) => v.initialization)
+                if (!parent.executed.includes('middleware')) {
+                    middlewares = [[parent as this, [...(parent.middlewares || [])].filter((m) => m.name !== this.currentMiddleware && (execute.includes('middleware') && !m.initialization))], ...middlewares]
+                }
+                if (!parent.executed.includes('initialization')) {
+                    initializations = [[parent as this, [...(parent.middlewares || [])].filter((m) => m.name !== this.currentMiddleware && (execute.includes('initialization') && m.initialization))], ...initializations]
                 }
                 parent = parent.parent
             }
+            if (execute.includes('initialization')) {
+                middlewares = [...initializations, ...middlewares]
+                if (!execute.includes('middleware')) {
+                    middlewares = [...initializations]
+                }
+            }
+            else {
+                middlewares = [...middlewares]
+            }
             if (middlewares.length) {
-                const call = async(i: number = 0) => {
+                const call = async(middlewareIndex: number = 0, commandIndex: number = 0): Promise<boolean> => {
                     nextHasBeenCalled = false
-                    if (middlewares[i]) {
-                        let middlewareStart = middlewares.filter((v) => v.initialization).length
-                        if (i < middlewareStart) {
-                            this.logger.trace(`Firing initialization "${middlewares[i].name}" ${i + 1}/${middlewareStart}`)
+                    if (middlewares[middlewareIndex][1][commandIndex]) {
+                        let middlewareStart = middlewares[middlewareIndex][1].filter((v) => v.initialization).length
+                        if (commandIndex < middlewareStart) {
+                            command.logger.trace(`Firing initialization "${middlewares[middlewareIndex][1][commandIndex].name}" ${commandIndex + 1}/${middlewareStart}`)
                         }
                         else {
-                            this.logger.trace(`Firing middleware "${middlewares[i].name}" ${(i - middlewareStart) + 1}/${middlewares.length - middlewareStart}`)
+                            command.logger.trace(`Firing middleware "${command.name}"->"${middlewares[middlewareIndex][1][commandIndex].name}" ${(commandIndex - middlewareStart) + 1}/${middlewares[middlewareIndex][1].length - middlewareStart}`)
                         }
-                        await middlewares[i].cb({
-                            options: this.lastOptions,
+                        await middlewares[middlewareIndex][1][commandIndex].cb({
+                            options: command.lastOptions,
                             next: async() => {
-                                this.logger.verbose(i === middlewares.length - 1 ? `All middlewares have been executed` : `Next middleware`)
+                                command.logger.verbose(commandIndex === middlewares.length - 1 ? `All middlewares have been executed` : `Next middleware`)
                                 nextHasBeenCalled = true
-                                await call(i + 1)
+                                await call(middlewareIndex, commandIndex + 1)
                             },
-                            cli: this
+                            cli: command
                         })
                     }
-                    else if (execute.includes('command')) {
+                    else if (middlewares.length - 1 === middlewareIndex) {
                         nextHasBeenCalled = true
-                        await runCommand()
+                        middlewares[middlewareIndex][0].executed.push(...execute.filter((v) => v !== 'command'))
+                        if (execute.includes('command')) {
+                            await runCommand(middlewares[middlewareIndex][0])
+                            return nextHasBeenCalled
+                        }
                     }
                     else {
                         nextHasBeenCalled = true
+                        middlewares[middlewareIndex][0].executed.push(...execute.filter((v) => v !== 'command'))
+                        return await call(middlewareIndex + 1, 0)
                     }
+                    return nextHasBeenCalled
                 }
-                await call()
-                return nextHasBeenCalled
+                return await call(0, 0) || nextHasBeenCalled
             }
             else if (execute.includes('command')) {
-                await runCommand()
+                await runCommand(command)
+                return nextHasBeenCalled
             }
         }
         else if (execute.includes('command')) {
-            await runCommand()
+            await runCommand(command)
+            return true
         }
         return true
     }

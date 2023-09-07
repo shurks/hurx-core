@@ -5,3 +5,5 @@ export type ObjectAndRecord<O extends object, R extends any> = O | Omit<{
 export type DeepPartial<T> = {
     [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K];
 }
+
+export type ArrayOrNonArray<T> = T[] | T
