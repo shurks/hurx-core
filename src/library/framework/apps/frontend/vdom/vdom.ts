@@ -174,7 +174,7 @@ export default class VDOM {
             VDOM.mountDOM(current, previous.rootElement, indices[0])
         }
         else if (current.element) {
- undefined
+            current.text = undefined
             current.component = undefined
             current.renderNode = undefined
             current.rootElement = previous.rootElement
@@ -232,7 +232,7 @@ export default class VDOM {
         // Structural changes
         if (
             !!current.isFragment !== !!previous.isFragment
-!== !!previous.text
+            || !!current.text !== !!previous.text
             || !!current.element !== !!previous.element
             || !!current.component !== !!previous.component
             || !!current.renderNode !== !!previous.renderNode
@@ -355,7 +355,6 @@ export default class VDOM {
                 throw new Error(`Invalid VNode`)
             }
         }
-        return false
     }
 
     /**
@@ -391,9 +390,13 @@ export default class VDOM {
      * @param current the current vdom
      */
     private updateDOM(previous: VDOM, current: VDOM) {
+        console.log({
+            previous,
+            current
+        })
         VDOM.createElements(current.root, previous.root)
         const div = VDOM.document.createElement('div')
-        // VDOM.mountDOM(current.root, div)
+        VDOM.mountDOM(current.root, div)
         this.markNodesToBeUpdated(previous.root, current.root, previous, current)
         console.log(previous, current)
         if (!this.updateNodes(previous.root, current.root, previous, current)) {
@@ -444,7 +447,6 @@ export default class VDOM {
                     processedChildren.push(child)
                 }
                 else {
-                    console.log({child})
                     const vnode = new VNode({
                         text: child instanceof Text ? child : typeof child === 'object'
                             ? document.createElement('span')

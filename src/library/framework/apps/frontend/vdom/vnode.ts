@@ -49,7 +49,7 @@ export interface VNodeOptions {
     /**
      * The text element, if any
      */
-    text?: Text|HTMLElement
+    text?: Text|HTMLSpanElement
 
     /**
      * The render node, if the component has been rendered
@@ -103,10 +103,10 @@ export default class VNode {
     /**
      * Get or set the HTML Text element of the vnode.
      */
-    public get text(): Text | HTMLElement | undefined {
+    public get text(): Text | HTMLSpanElement | undefined {
         return this.options.text
     }
-    public set text(text: Text | HTMLElement | undefined) {
+    public set text(text: Text | HTMLSpanElement | undefined) {
         this.options.text = text
     }
 

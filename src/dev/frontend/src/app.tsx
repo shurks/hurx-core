@@ -63,8 +63,8 @@ class A extends Component<any, { test: number }> {
                 this.state.test ++
             }}>
                 {this.state.test}
-                <div>testtetesttest</div>
-                <div>fessf</div>
+                <div>tests</div>
+                <div>tesatta</div>
                 {/* Parent */}
                 <div>1ss</div>
                 <div>3</div>
@@ -85,6 +85,7 @@ new VDOM(
         <div style="background: red; color: white; padding: 5px;"><div>Start of VDOM</div></div>
         <div>Tessts</div>
         <>
+            <div>TESsT</div>
             <div>TESsT</div>
             <div>TEST</div>
             <div>TEST</div>
