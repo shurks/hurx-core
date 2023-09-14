@@ -1,6 +1,6 @@
 import Command from "../library/framework/apps/cli/command"
 import { CLICommand } from "../library/framework/apps/cli/types"
-import Hurx from "../library/framework/hurx"
+import Hurx from "../library/framework/node/hurx"
 import Tests from "./tests"
 
 export class Test extends CLICommand<Tests> {

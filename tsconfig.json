@@ -29,8 +29,8 @@
         "declarationMap": true,
         "preserveSymlinks": true,
         "jsx": "react",
-        "jsxFactory": "JSX.createVNode",
-        "jsxFragmentFactory": "JSX.createVNode"
+        "jsxFactory": "VDOM.createNode",
+        "jsxFragmentFactory": "VDOM.createNode"
     },
     "include": [
         "./src/**/*.ts",

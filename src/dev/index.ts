@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import HurxCLI from "../bin/hurx/hurx-cli"
+import HurxCLI from "../library/cli/hurx-cli"
 import CLI from "../library/framework/apps/cli/cli"
 import hurxCorePlugin from "../library/framework/apps/cli/plugins/hurx-core-plugin"
 import { CLIMaster } from "../library/framework/apps/cli/types"

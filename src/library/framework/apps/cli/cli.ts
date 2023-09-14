@@ -1,4 +1,4 @@
-import Hurx from "../../hurx"
+import Hurx from "../../node/hurx"
 import { Option, Events, EventHandler, CommandOptions, MiddlewareOptions, CLICommand, CLIMaster } from "./types"
 
 /**

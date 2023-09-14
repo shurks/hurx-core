@@ -1,5 +1,5 @@
 import { Server, createServer } from "http"
-import Hurx from "../../hurx"
+import Hurx from "../../node/hurx"
 import { readFileSync } from "fs"
 import { execSync } from "child_process"
 import path from "path"
@@ -13,10 +13,11 @@ export default class Frontend {
      */
     public server: Server
 
-    constructor(public port: number) {
-        // TODO: remove keep-names in production
-        execSync('npx esbuild ./src/frontend/index.tsx --keep-names --bundle --outfile=dist/bundle.min.js --target=es6 --external:"jsdom"', {
-            cwd: process.cwd()
+    constructor(public entryFilePath: string, public port: number) {
+        // TODO: remove keep-names in production and add --minify
+        execSync(`npx esbuild ${entryFilePath} --keep-names --bundle --outfile=dist/bundle.min.js --target=es6 --external:"jsdom"`, {
+            cwd: process.cwd(),
+            stdio: 'ignore'
         })
         const bundleJS = readFileSync(path.join(process.cwd(), 'dist', 'bundle.min.js')).toString('utf8')
         this.server = createServer((req, res) => {
@@ -35,8 +36,7 @@ export default class Frontend {
                     <html>
                         <body>
                             <script src="bundle.min.js" type="module" defer></script>
-                            <div id="main">
-                            </div>
+                            <div id="main"></div>
                         </body>
                     </html>
                 `)

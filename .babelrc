@@ -3,10 +3,9 @@
         [
             "@babel/preset-env",
             {
-                "targets": "last 2 versions, > 1%"
+                "targets": "defaults"
             }
         ],
-        "@babel/preset-react",
         "@babel/preset-typescript"
     ]
 }

@@ -1,5 +1,5 @@
 import Logger from "../../../utils/logger"
-import Hurx from "../../hurx"
+import Hurx from "../../node/hurx"
 import CLI from "./cli"
 import Command from "./command"
 

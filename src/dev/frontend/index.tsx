@@ -63,7 +63,7 @@ class A extends Component<any, { test: number }> {
                 this.state.test ++
             }}>
                 {this.state.test}
-                <div>asasssaass</div>
+                <div>asasssaeastests</div>
                 <div>fessf</div>
                 {/* Parent */}
                 <div>1ss</div>
@@ -85,26 +85,34 @@ new VDOM(
         <div style="background: red; color: white; padding: 5px;"><div>Start of VDOM</div></div>
         <div>Tessts</div>
         <>
+            <div>TEST</div>
+            <div>TEST</div>
+            <div>TEST</div>
+            <div>TEST</div>
+            <TestPage />
             <Router>
+                <div>Route tes12sst</div>
                 <div>Route tes12t</div>
                 <div>Route tes12t</div>
-                <div>Route tes12t</div>
-                <div>Route tes12ts</div>
+                <div>Route tes12tss</div>
+                <div>Route tes12tss</div>
                 <A />
                 test2
                 <Route path="/test">
                     <TestPage />
                     <TestPage />
-                    <TestPage />
+                    {/* <TestPage /> */}
                 </Route>
-                {/* <Route path="/test2">
+                <Route path="/test2">
+                    <TestPage />
+                    <TestPage />
                     <TestPage />
                     <TestPage />
                 </Route>
                 <Route path="/">
                     <HomePage />
-                </Route> */}
-                test12345
+                </Route>
+                test12345678
             </Router>
         </>
         <div style="background: maroon; color: white; padding: 5px;"><div>End of VDOM</div></div>
