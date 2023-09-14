@@ -15,7 +15,7 @@ import { execSync } from 'child_process'
 
 const logger = new Logger()
 const app = express()
-const packageOrHurx = Env.findProject(process.cwd())
+const packageOrHurx = Env.findProject(path.join(process.cwd(), '../'))
 // TODO: env
 if (!packageOrHurx) {
 	throw Error(`Couldn't find project root: no package.json or hurx.json found.`)
@@ -27,10 +27,10 @@ logger.info(`Project found: "${project}"`)
 const config: webpack.Configuration & webpackDevServer.Configuration = {
 	mode: 'development',
 	entry: {
-		main: [path.join(process.cwd(), 'index.tsx')]
+		main: [path.join(project, 'src', 'dev', 'frontend', 'src', 'app.tsx')]
 	},
 	output: {
-		path: path.resolve(process.cwd(), 'public'),
+		path: path.resolve(project, 'src', 'dev', 'frontend', 'public'),
 		filename: 'bundle.min.js',
 	},
 	devServer: {
@@ -100,7 +100,7 @@ app.use(
 )
 compiler.hooks.done.tap(`HotReloadLogic`, () => {
 	console.log('Hot reloading...')
-	execSync(`npx esbuild ${path.join(process.cwd(), 'index.tsx')} --keep-names --bundle --outfile=${path.join(process.cwd(), 'public', 'bundle.min.js')} --target=es6 --external:"jsdom"`, {
+	execSync(`npx esbuild ${path.join(process.cwd(), 'src', 'app.tsx')} --keep-names --bundle --outfile=${path.join(process.cwd(), 'public', 'bundle.min.js')} --target=es6 --external:"jsdom"`, {
 		cwd: process.cwd(),
 		stdio: 'ignore'
 	})

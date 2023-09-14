@@ -1,8 +1,8 @@
-import Component from "../../library/framework/apps/frontend/components/component/component"
-import VDOM from "../../library/framework/apps/frontend/vdom/vdom"
-import Page from "../../library/framework/apps/frontend/components/page"
-import { Router } from "../../library/framework/apps/frontend/components/router/router"
-import { Route } from "../../library/framework/apps/frontend/components/router/route"
+import Component from "../../../library/framework/apps/frontend/components/component/component"
+import VDOM from "../../../library/framework/apps/frontend/vdom/vdom"
+import Page from "../../../library/framework/apps/frontend/components/page"
+import { Router } from "../../../library/framework/apps/frontend/components/router/router"
+import { Route } from "../../../library/framework/apps/frontend/components/router/route"
 
 /**
  * Test
@@ -30,7 +30,7 @@ export class HomePage extends Page {
         }} onClick={(e) => {
             
         }}>
-            homeessssss
+            homeesssssss
             <TestComponent />
         </div>
     }
@@ -42,7 +42,7 @@ export class HomePage extends Page {
 export class TestPage extends Page {
     public render() {
         return <div id="test" style="background: yellow; padding: 5px;">
-            Test pagessa
+            Test pagessaad
             <TestComponent />
         </div>
     }
@@ -63,7 +63,7 @@ class A extends Component<any, { test: number }> {
                 this.state.test ++
             }}>
                 {this.state.test}
-                <div>asasssaeastests</div>
+                <div>testtetesttest</div>
                 <div>fessf</div>
                 {/* Parent */}
                 <div>1ss</div>
@@ -85,7 +85,7 @@ new VDOM(
         <div style="background: red; color: white; padding: 5px;"><div>Start of VDOM</div></div>
         <div>Tessts</div>
         <>
-            <div>TEST</div>
+            <div>TESsT</div>
             <div>TEST</div>
             <div>TEST</div>
             <div>TEST</div>
@@ -97,11 +97,11 @@ new VDOM(
                 <div>Route tes12tss</div>
                 <div>Route tes12tss</div>
                 <A />
-                test2
+                test2s
                 <Route path="/test">
                     <TestPage />
+                    test
                     <TestPage />
-                    {/* <TestPage /> */}
                 </Route>
                 <Route path="/test2">
                     <TestPage />

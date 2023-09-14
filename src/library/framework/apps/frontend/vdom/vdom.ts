@@ -72,7 +72,7 @@ export default class VDOM {
         }
 
         // Traverse through the nodes to be updated
-        if (!previous.shouldUpdate && !current.shouldUpdate) {
+        if (!previous.shouldUpdate || !current.shouldUpdate) {
             let success = true
             if (previous.component) {
                 for (let i = previous.renderNode!.children.length - 1; i >= 0; i --) {
@@ -100,10 +100,6 @@ export default class VDOM {
 
         // Remove the old nodes
         const indices = VDOM.getRootElementIndices(previous, previous)
-        console.log({indices, previous})
-        for (let i = indices[indices.length - 1]; i >= indices[0]; i --) {
-            previous.rootElement.removeChild(previous.rootElement.childNodes[i])
-        }
 
         // Re-initialize the previous node
         if (current.component) {
@@ -147,6 +143,7 @@ export default class VDOM {
             }
         }
         else if (current.isFragment) {
+            current.text = undefined
             current.element = undefined
             current.component = undefined
             current.renderNode = undefined
@@ -177,6 +174,7 @@ export default class VDOM {
             VDOM.mountDOM(current, previous.rootElement, indices[0])
         }
         else if (current.element) {
+ undefined
             current.component = undefined
             current.renderNode = undefined
             current.rootElement = previous.rootElement
@@ -200,6 +198,18 @@ export default class VDOM {
             // Mount the element
             VDOM.mountDOM(current, previous.rootElement, indices[0])
         }
+        const elementCount = VDOM.getElements(current).length
+        for (let i = indices.length - 1; i >= 0; i --) {
+            const child = previous!.rootElement!.childNodes[indices[0] + i + elementCount]
+            if (child) {
+                try {
+                    child.remove()
+                }
+                catch (err) {
+                    console.log(err)
+                }
+            }
+        }
         current.shouldUpdate = false
         previous.shouldUpdate = false
         return true
@@ -222,7 +232,7 @@ export default class VDOM {
         // Structural changes
         if (
             !!current.isFragment !== !!previous.isFragment
-            || !!current.text !== !!previous.text
+!== !!previous.text
             || !!current.element !== !!previous.element
             || !!current.component !== !!previous.component
             || !!current.renderNode !== !!previous.renderNode
@@ -434,6 +444,7 @@ export default class VDOM {
                     processedChildren.push(child)
                 }
                 else {
+                    console.log({child})
                     const vnode = new VNode({
                         text: child instanceof Text ? child : typeof child === 'object'
                             ? document.createElement('span')
@@ -816,7 +827,7 @@ export default class VDOM {
                 insertions.count ++
             }
             else {
-                appendToElement.appendChild(vnode.element)
+                appendToElement.append(vnode.element)
             }
             if (!(vnode.element instanceof Text)) {
                 for (const child of vnode.children) {
