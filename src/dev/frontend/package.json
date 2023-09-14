@@ -1,0 +1,8 @@
+{
+    "scripts": {
+        "start": "npx ts-node ../../library/framework/apps/frontend/webpack/server"
+    },
+    "dependencies": {
+        "ws": "^8.14.1"
+    }
+}
