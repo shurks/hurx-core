@@ -17,12 +17,12 @@ export default class VDOM {
     /**
      * The window (either a JSDOM instance in case of Node.JS otherwise the browsers window object)
      */
-    private static window = window || new (require('jsdom').JSDOM)().window
+    public static window = window || new (require('jsdom').JSDOM)().window
     
     /**
      * The document in the window
      */
-    private static document = this.window.document
+    public static document = this.window.document
 
     private static get logger() {
         return new Logger()
@@ -30,6 +30,11 @@ export default class VDOM {
     private get logger() {
         return VDOM.logger
     }
+
+    /**
+     * The VDOM type
+     */
+    public readonly VDOM = VDOM
 
     /**
      * The VDOM id
@@ -53,7 +58,41 @@ export default class VDOM {
         }
         root.rootElement = main
         this.main = main
-        this.setVDOM()
+        this.initialize()
+    }
+
+    /**
+     * Finds a Node by ID
+     * @param id the ID
+     */
+    public findById(id: number): VNode|null {
+        const findById = (vnode: VNode): VNode|null => {
+            if (vnode.id === id && !vnode.destroyed) {
+                return vnode
+            }
+            if (vnode.component) {
+                if (vnode.renderNode) {
+                    for (const child of vnode.renderNode.children) {
+                        const result = findById(child)
+                        if (result) {
+                            return result
+                        }
+                    }
+                }
+                else if (vnode.renderNode === undefined) {
+                    this.logger.verbose({vnode})
+                    throw new Error(`VNode was never rendered`)
+                }
+            }
+            for (const child of vnode.children) {
+                const result = findById(child)
+                if (result) {
+                    return result
+                }
+            }
+            return null
+        }
+        return findById(this.root)
     }
 
     /**
@@ -63,6 +102,7 @@ export default class VDOM {
      * @param current the current node
      * @param previousDOM the previous VDOM
      * @param currentDOM the current VDOM
+     * @param updatedParents the parents that are already updated
      * @returns true on success
      */
     private updateNodes = (previous: VNode, current: VNode, previousDOM: VDOM, currentDOM: VDOM): boolean => {
@@ -74,17 +114,21 @@ export default class VDOM {
         // Traverse through the nodes to be updated
         if (!previous.shouldUpdate || !current.shouldUpdate) {
             let success = true
-            if (previous.component) {
-                for (let i = previous.renderNode!.children.length - 1; i >= 0; i --) {
-                    if (!this.updateNodes(previous.renderNode!.children[i], current.renderNode!.children[i], previousDOM, currentDOM)) {
-                        success = false
+            if (previous.component && current.component) {
+                if (previous.renderNode && current.renderNode) {
+                    for (let i = previous.renderNode.children.length - 1; i >= 0; i --) {
+                        if (!this.updateNodes(previous.renderNode.children[i], current.renderNode.children[i], previousDOM, currentDOM)) {
+                            success = false
+                        }
                     }
                 }
             }
-            else if (!previous.text) {
-                for (let i = previous.children.length - 1; i >= 0; i --) {
-                    if (!this.updateNodes(previous.children[i], current.children[i], previousDOM, currentDOM)) {
-                        success = false
+            else if (!previous.text && !current.text) {
+                if (previous.children.length == current.children.length && previous.children.length) {
+                    for (let i = previous.children.length - 1; i >= 0; i --) {
+                        if (!this.updateNodes(previous.children[i], current.children[i], previousDOM, currentDOM)) {
+                            success = false
+                        }
                     }
                 }
             }
@@ -94,124 +138,19 @@ export default class VDOM {
         // Update the entire DOM
         if (previous === previousDOM.root) {
             this.logger.trace(`Updating entire DOM`)
-            currentDOM.replaceDOM(previousDOM)
+            currentDOM.initializeDOM()
+
+            // Replaces previous with current
+            previousDOM.root = currentDOM.root
             return true
         }
 
         // Remove the old nodes
-        const indices = VDOM.getRootElementIndices(previous, previous)
+        const indices = previous.getRootElementIndices()
+        console.log({indices, previous, query: (previous.renderNodeParent || previous.parent ? Math.max((previous.renderNodeParent ? previous.renderNodeParent : previous.parent)!.children.map((v, i, a) => i >= a.indexOf(previous) ? 0 : v.getElements().length).reduce((x, y) => x + y, 0), indices[0]) : null)})
 
-        // Re-initialize the previous node
-        if (current.component) {
-            previous.element = undefined
-            previous.text = undefined
-            previous.isFragment = false
-            current.rootElement = previous.rootElement
-            current.parent = previous.parent
-            current.id = previous.id
-            current.component.vnode = previous
-
-            if (current.renderNode === null) {
-                previous.renderNode = null
-                this.logger.trace(`Updating component`, {
-                    name: ((current.component as any).constructor.name),
-                    current,
-                    previous
-                })
-            }
-            else {
-                if (previous.component) {
-                    if (String((previous.component as any).constructor) === String((current.component as any).constructor)) {
-                        // Assign previous state to current
-                        current.component.state = VDOM.deepAssign(current.component.state, previous.component.state)
-                    }
-                }
-                previous.component = current.component
-                current.renderNode = current.component.render()
-                if (current.renderNode) {
-                    VDOM.createElements(current.renderNode, previous.renderNode || null)
-                    current.renderNode.renderNodeParent = previous
-                    previous.renderNode = current.renderNode
-                    this.logger.trace(`Updating component`, {
-                        name: ((current.component as any).constructor.name),
-                        current,
-                        previous
-                    })
-                    VDOM.mountDOM(previous.renderNode, previous.rootElement, indices[0])
-                }
-                previous.component = current.component
-            }
-        }
-        else if (current.isFragment) {
-            current.text = undefined
-            current.element = undefined
-            current.component = undefined
-            current.renderNode = undefined
-            current.rootElement = previous.rootElement
-            current.parent = previous.parent
-            current.isFragment = true
-            current.id = previous.id
-            this.logger.trace(`Updating fragment`, {
-                current,
-                previous
-            })
-            VDOM.mountDOM(current, previous.rootElement, previous.parent ? previous.parent.children.map((v, i, a) => i >= a.indexOf(previous) ? 0 : VDOM.getElements(v).length).reduce((x, y) => x + y, 0) : null)
-            previous.parent!.children = previous.parent!.children.map((v) => v === previous ? current : v)
-        }
-        else if (current.text) {
-            current.element = current.text
-            current.component = undefined
-            current.renderNode = undefined
-            current.rootElement = previous.rootElement
-            current.parent = previous.parent
-            current.isFragment = false
-            current.id = previous.id
-            previous.parent!.children = previous.parent!.children.map((v) => v === previous ? current : v)
-            this.logger.trace(`Updating text`, {
-                current,
-                previous
-            })
-            VDOM.mountDOM(current, previous.rootElement, indices[0])
-        }
-        else if (current.element) {
-            current.text = undefined
-            current.component = undefined
-            current.renderNode = undefined
-            current.rootElement = previous.rootElement
-            current.parent = previous.parent
-            current.isFragment = true
-            current.id = previous.id
-            previous.parent!.children = previous.parent!.children.map((v) => v === previous ? current : v)
-            if (previous.attributes && current.attributes !== previous.attributes) {
-                previous.attributes = current.attributes
-            }
-            // Set the attributes
-            if (current.element instanceof Element) {
-                VDOM.setAttributes(current.attributes, current.element)
-            }
-            this.logger.trace(`Updating element`, {
-                currentEl: current.element,
-                previousEl: previous.element,
-                current,
-                previous
-            })
-            // Mount the element
-            VDOM.mountDOM(current, previous.rootElement, indices[0])
-        }
-        const elementCount = VDOM.getElements(current).length
-        for (let i = indices.length - 1; i >= 0; i --) {
-            const child = previous!.rootElement!.childNodes[indices[0] + i + elementCount]
-            if (child) {
-                try {
-                    child.remove()
-                }
-                catch (err) {
-                    console.log(err)
-                }
-            }
-        }
-        current.shouldUpdate = false
-        previous.shouldUpdate = false
+        // Replace the previous node with the current node
+        previous.replace(current)
         return true
     }
 
@@ -222,20 +161,12 @@ export default class VDOM {
      * @returns true if everything has changed inside
      */
     private markNodesToBeUpdated(previous: VNode, current: VNode, previousVDOM: VDOM, currentVDOM: VDOM): boolean {
-        // Set the element
-        if (current.text) {
-            current.element = current.text
-        }
-        if (previous.text) {
-            previous.element = previous.text
-        }
         // Structural changes
         if (
             !!current.isFragment !== !!previous.isFragment
             || !!current.text !== !!previous.text
             || !!current.element !== !!previous.element
             || !!current.component !== !!previous.component
-            || !!current.renderNode !== !!previous.renderNode
             || current.children.length !== previous.children.length
             || (current.component && previous.component && (
                 !!previous.renderNode !== !!current.renderNode
@@ -285,31 +216,6 @@ export default class VDOM {
                 }
                 return shouldUpdate
             }
-            else if (current.text) {
-                this.logger.verbose('text')
-                if (previous.rootElement) {
-                    previous.shouldUpdate = true
-                    current.shouldUpdate = true
-                    const values = {
-                        current: current.text instanceof Text
-                            ? current.text.textContent
-                            : current.text.outerHTML,
-                        previous: previous.text instanceof Text
-                            ? previous.text.textContent
-                            : previous.text!.outerHTML
-                    }
-                    if (values.current === values.previous) {
-                        previous.shouldUpdate = false
-                        current.shouldUpdate = false
-                        return false
-                    }
-                    return true
-                }
-                else {
-                    this.logger.verbose({previous, current})
-                    throw new Error(`Previous has no root element`)
-                }
-            }
             else if (current.element) {
                 this.logger.verbose('element')
                 if (previous.rootElement) {
@@ -326,21 +232,16 @@ export default class VDOM {
                     if (values.current === values.previous) {
                         previous.shouldUpdate = false
                         current.shouldUpdate = false
-                        // Set the attributes, no further updating needed
-                        if (current.attributes !== previous.attributes) {
-                            previous.attributes = current.attributes
-                            if (previous.element instanceof Element) {
-                                VDOM.setAttributes(current.attributes, previous.element)
-                            }
-                        }
                         return false
                     }
                     let shouldUpdate = true
-                    for (let i = 0; i < current.children.length; i ++) {
-                        if (!this.markNodesToBeUpdated(previous.children[i], current.children[i], previousVDOM, currentVDOM)) {
-                            shouldUpdate = false
-                            previous.shouldUpdate = false
-                            current.shouldUpdate = false
+                    if (current.element instanceof Element) {
+                        for (let i = 0; i < current.children.length; i ++) {
+                            if (!this.markNodesToBeUpdated(previous.children[i], current.children[i], previousVDOM, currentVDOM)) {
+                                shouldUpdate = false
+                                previous.shouldUpdate = false
+                                current.shouldUpdate = false
+                            }
                         }
                     }
                     return shouldUpdate
@@ -358,61 +259,42 @@ export default class VDOM {
     }
 
     /**
-     * Sets the VDOM and mounts it into the main element
+     * Intializes the VDOM and mounts it into the main element
      * @param main the main element
      * @param root the root vnode
      */
-    private setVDOM() {
+    private initialize() {
         ((VDOM.window as any).VDOMS) = ((VDOM.window as any).VDOMS) || [] as VDOM[]
         const vdoms: VDOM[] = (VDOM.window as any).VDOMS
         const previous = vdoms.find((v) => v.main === this.main)
         const current = this
         current.root.rootElement = current.main
-
+        
         // Update the VDOM
         if (previous) {
+            current.root.vdom = this
             this.logger.verbose(`Updating DOM based on Hot Reload`)
-            this.updateDOM(previous, current);
-            // ((VDOM.window as any).VDOMS) = vdoms.map((v) => v.main === this.main ? this : v)
+            current.root.createElements(previous.root)
+            const div = VDOM.document.createElement('div')
+            current.root.mount(div)
+            this.markNodesToBeUpdated(previous.root, current.root, previous, current)
+            if (!this.updateNodes(previous.root, current.root, previous, current)) {
+                this.logger.verbose({previous, current})
+                throw new Error(`Could not update nodes, updating DOM failed.`)
+            }
+            previous.root.setRootElement(previous.main)
+            current.root.setRootElement(previous.main)
+            current.root = previous.root;
+            ((VDOM.window as any).VDOMS) = vdoms.map((v) => v.main === this.main ? this : v)
         }
         
         // Create the first VDOM
         else {
+            current.root.vdom = this
             this.logger.verbose(`Initializing DOM`)
             this.initializeDOM()
             vdoms.push(this)
         }
-    }
-
-    /**
-     * Updates the DOM by comparing the current VDOM to the previous VDOM
-     * @param previous the previous vdom
-     * @param current the current vdom
-     */
-    private updateDOM(previous: VDOM, current: VDOM) {
-        console.log({
-            previous,
-            current
-        })
-        VDOM.createElements(current.root, previous.root)
-        const div = VDOM.document.createElement('div')
-        VDOM.mountDOM(current.root, div)
-        this.markNodesToBeUpdated(previous.root, current.root, previous, current)
-        console.log(previous, current)
-        if (!this.updateNodes(previous.root, current.root, previous, current)) {
-            this.logger.verbose({previous, current})
-            throw new Error(`Could not update nodes, updating DOM failed.`)
-        }
-    }
-
-    /**
-     * Replaces the content of the main element with the new content
-     */
-    private replaceDOM(previous: VDOM) {
-        this.initializeDOM()
-
-        // Replaces previous with current
-        previous.root = this.root
     }
 
     /**
@@ -423,8 +305,8 @@ export default class VDOM {
         this.main.innerHTML = ''
 
         // Create and mount the VDOM
-        VDOM.createElements(this.root, null)
-        VDOM.mountDOM(this.root, this.main)
+        this.root.createElements()
+        this.root.mount(this.main)
     }
 
     /**
@@ -484,453 +366,11 @@ export default class VDOM {
             vnode
         })
         if (vnode.component) {
-            vnode.component.vnode = vnode
+            (vnode.component as any).vnode = vnode
         }
         processedChildren.forEach((v) => {
             v.parent = vnode
         })
         return vnode
-    }
-
-    /**
-     * Deeply assigns objectB by objectA
-     * @param objectA the object to assign to
-     * @param objectB the object to assign with
-     */
-    private static deepAssign(objectA: {}, objectB: {}) {
-        for (const key of Object.keys(objectB)) {
-            if (typeof (objectA as any)[key] === 'object') {
-                if (typeof (objectB as any)[key] === 'object') {
-                    (objectA as any)[key] = this.deepAssign((objectA as any)[key], (objectB as any)[key])
-                }
-                else {
-                    (objectA as any)[key] = (objectB as any)[key]
-                }
-            }
-            else {
-                (objectA as any)[key] = (objectB as any)[key]
-            }
-        }
-        return objectA
-    }
-
-    /**
-     * Get the elements of a vnode
-     * @param vnode the vnode
-     * @param elements the elements
-     */
-    private static getElements(vnode: VNode, elements: Array<Element|Text> = []): Array<Element|Text> {
-        if (vnode.component) {
-            if (vnode.renderNode) {
-                this.getElements(vnode.renderNode, elements)
-            }
-            else if (vnode.renderNode === undefined) {
-                this.logger.verbose({vnode, elements})
-                throw new Error(`Vnode was never rendered`)
-            }
-        }
-        else if (vnode.isFragment) {
-            for (const child of vnode.children) {
-                this.getElements(child, elements)
-            }
-        }
-        else if (vnode.element) {
-            elements.push(vnode.element)
-        }
-        return elements
-    }
-
-    /**
-     * Creates the elements within a root VNode
-     * @param vnode the root vnode
-     */
-    private static createElements(vnode: VNode, originalNode: VNode|null) {
-        if (vnode.component && !vnode.renderNode) {
-            type State = {
-                constructor: string,
-                state: {}
-            };
-            (this.window as any).states = (this.window as any).states || [];
-            const states: State[] = (this.window as any).states
-            const state = states.find((v) => v.constructor === String((vnode.component as any).constructor));
-            const setState = () => {
-                if (originalNode && originalNode.component) {
-                    vnode.component!.state = {
-                        ...this.deepAssign(vnode.component!.state, originalNode.component.state)
-                    }
-                }
-            }
-            if (!state) {
-                ((this.window as any).states as State[]).push({
-                    constructor: String((vnode.component as any).constructor),
-                    state: this.deepAssign({}, vnode.component.state)
-                })
-                setState()
-            }
-            else if (JSON.serialize(state.state) !== JSON.serialize(vnode.component.state)) {
-                state.state = vnode.component.state
-            }
-            else {
-                setState()
-            }
-            vnode.renderNode = vnode.component?.render()
-            if (vnode.renderNode) {
-                vnode.renderNode.renderNodeParent = vnode
-                this.createElements(vnode.renderNode, originalNode)
-            }
-        }
-        else if (!vnode.component) {
-            if (vnode.isFragment) {
-                for (let i = 0; i < vnode.children.length; i ++) {
-                    this.createElements(vnode.children[i], originalNode?.children[i] || null)
-                }
-            }
-            else if (vnode.text) {
-                vnode.element = vnode.text
-            }
-            else if (vnode.tag) {
-                vnode.element = this.document.createElement(vnode.tag)
-                this.setAttributes(vnode.attributes, vnode.element)
-                for (let i = 0; i < vnode.children.length; i ++) {
-                    this.createElements(vnode.children[i], originalNode?.children[i] || null)
-                }
-            }
-            else {
-                this.logger.verbose({vnode})
-                throw new Error(`Unknown VNode syntax`)
-            }
-        }
-        return null
-    }
-
-    /**
-     * Finds the node index of element within the childNodes of rootElement
-     * @param rootElement the root element containing the element
-     * @param element the element
-     * @returns the index or -1 if not found
-     */
-    private static getNodeIndex(rootElement: Element, element: Element|Text): number {
-        // Get the child nodes of the element
-        const children = rootElement.childNodes
-
-        // Iterate through the child nodes
-        for (let i = 0; i < children.length; i++) {
-            const node = children[i]
-            if (node === element) {
-                return i
-            }
-        }
-
-        // Return -1 if the node is not found within the element
-        return -1
-    }
-
-    /**
-     * Gets the element indices within any node
-     * @param base 
-     * @param current 
-     */
-    private static getRootElementIndices(base: VNode, current: VNode, indices: Array<number> = []): Array<number> {
-        if (!base.rootElement) {
-            this.logger.verbose({base, current, indices})
-            throw new Error(`Base has no root element.`)
-        }
-        const containingElement = base.rootElement
-        if (current.component) {
-            if (current.renderNode === undefined) {
-                this.logger.verbose({base, current, indices})
-                throw new Error(`Base has component but it hasn't been rendered yet, so it's not in the DOM.`)
-            }
-            if (current.renderNode) {
-                return this.getRootElementIndices(base, current.renderNode, indices)
-            }
-        }
-        else if (current.isFragment) {
-            for (const child of current.children) {
-                this.getRootElementIndices(base, child, indices)
-            }
-        }
-        else if (current.element) {
-            indices.push(this.getNodeIndex(containingElement, current.element))
-        }
-        else {
-            this.logger.verbose({base, current, indices})
-            throw Error(`Invalid VNode.`)
-        }
-        return indices
-    }
-
-    /**
-     * Updates the DOM based on a changed VDOM node that is a component 
-     * @param vnode the vdom
-     */
-    public static rerenderComponent(vnode: VNode) {
-        if (vnode.element && !vnode.parent?.rootElement) {
-            this.logger.verbose({vnode})
-            throw new Error(`VNode has element but no parent with root element.`)
-        }
-        if (!vnode.rootElement) {
-            this.logger.verbose({vnode})
-            throw new Error(`VNode has no root element.`)
-        }
-        if (vnode.component) {
-            // Can't rerender an unrendered component
-            if (!vnode.renderNode) {
-                return
-            }
-
-            // Get the node indices
-            const indices = this.getRootElementIndices(vnode, vnode)
-            const min = indices[0]
-            const max = indices[indices.length - 1]
-
-            // Remove old nodes
-            const element = vnode.rootElement
-            for (let i = max; i >= min; i --) {
-                element.removeChild(element.childNodes[i])
-            }
-
-            // Rerender
-            vnode.renderNode = vnode.component?.render()
-            if (vnode.renderNode) {
-                vnode.renderNode.renderNodeParent = vnode
-
-                // Create the newly rendered elements
-                this.createElements(vnode.renderNode, null)
-                
-                // Get the elements of the renderNode
-                const getElements = (vnode: VNode, elements: Array<Element | Text> = []): Array<Element | Text> => {
-                    if (vnode.component) {
-                        if (vnode.renderNode) {
-                            getElements(vnode.renderNode, elements)
-                        }
-                        else if (vnode.renderNode === undefined) {
-                            this.logger.verbose({vnode})
-                            throw new Error(`VNode has a component, but no renderNode. Try calling \`this.createElements\` first.`)
-                        }
-                    }
-                    else if (vnode.isFragment) {
-                        for (const child of vnode.children) {
-                            getElements(child, elements)
-                        }
-                    }
-                    else if (vnode.element) {
-                        elements.push(vnode.element)
-                        if (!(vnode.element instanceof Text)) {
-                            const fillElement = (element: Element, vnode: VNode) => {
-                                if (vnode.component) {
-                                    if (vnode.renderNode) {
-                                        fillElement(element, vnode.renderNode)
-                                    }
-                                    else if (vnode.renderNode === undefined) {
-                                        this.logger.verbose({vnode})
-                                        throw new Error(`VNode of type component is not rendered`)
-                                    }
-                                }
-                                else if (vnode.isFragment) {
-                                    for (const child of vnode.children) {
-                                        fillElement(element, child)
-                                    }
-                                }
-                                else if (vnode.element) {
-                                    if (vnode.element instanceof Text) {
-                                        element.append(vnode.element)
-                                    }
-                                    else {
-                                        element.append(vnode.element)
-                                        for (const child of vnode.children) {
-                                            fillElement(vnode.element, child)
-                                        }
-                                    }
-                                }
-                            }
-                            for (const child of vnode.children) {
-                                fillElement(vnode.element, child)
-                            }
-                        }
-                        this.logger.verbose({el: vnode.element, children: vnode.children})
-                    }
-                    else {
-                        this.logger.verbose({vnode})
-                        throw new Error(`Invalid VNode.`)
-                    }
-                    return elements
-                }
-                const elements = getElements(vnode.renderNode)
-
-                // Insert the elements
-                for (let i = min; i < elements.length + min; i ++) {
-                    element.insertBefore(elements[i - min], element.childNodes[i])
-                }
-            }
-        }
-        else {
-            this.logger.verbose({vnode})
-            throw new Error(`The rerenderComponent function is only for components.`)
-        }
-    }
-
-    /**
-     * Unmounts a VNode from the DOM
-     * @param vnode the vnode
-     */
-    private static unmountDOM(vnode: VNode) {
-        if (vnode.component) {
-            if (vnode.renderNode) {
-                this.unmountDOM(vnode.renderNode)
-            }
-            else if (vnode.renderNode === undefined) {
-                this.logger.verbose({vnode})
-                throw new Error(`VNode was never rendered.`)
-            }
-        }
-        else if (vnode.isFragment) {
-            vnode.children.forEach((c) => this.unmountDOM(c))
-        }
-        else if (vnode.element) {
-            vnode.element.parentElement?.removeChild(vnode.element)
-            vnode.element = null
-        }
-    }
-
-    /**
-     * Mounts the VDOM into the DOM after creating the elements
-     * @param vnode the root vnode
-     * @param appendTo the vnode to append everything to, must contain a Element
-     * @param type the type of processing
-     */
-    private static mountDOM(vnode: VNode, appendTo: VNode|Element, index: null|number = null, insertions: {count: number} = {count: 0}) {
-        const appendToElement = appendTo instanceof Element
-            ? appendTo
-            : appendTo.element || appendTo.rootElement
-        if (!appendToElement) {
-            throw new Error(`No element found to mount the DOM in.`)
-        }
-        if (!(appendToElement instanceof HTMLElement)) {
-            throw new Error(`Append to element is not of type HTMLElement.`)
-        }
-        if (vnode.component) {
-            if (vnode.renderNode) {
-                this.mountDOM(vnode.renderNode, appendTo, index, insertions)
-            }
-            else if (vnode.renderNode === undefined) {
-                this.logger.verbose({vnode, appendTo})
-                throw new Error(`VNode was never rendered`)
-            }
-        }
-        else if (vnode.isFragment) {
-            for (const child of vnode.children) {
-                this.mountDOM(child, appendTo, index, insertions)
-            }
-        }
-        else if (vnode.element) {
-            if (index !== null) {
-                appendToElement.insertBefore(vnode.element, appendToElement.childNodes.item(index + insertions.count))
-                insertions.count ++
-            }
-            else {
-                appendToElement.append(vnode.element)
-            }
-            if (!(vnode.element instanceof Text)) {
-                for (const child of vnode.children) {
-                    this.mountDOM(child, vnode.element)
-                }
-            }
-        }
-        else {
-            this.logger.verbose({vnode, appendTo, index, insertions})
-            throw new Error(`Invalid VNode object`)
-        }
-    }
-
-    /**
-     * Sets attributes to an element
-     * @param attributes the attributes
-     * @param element the element
-     */
-    private static setAttributes(attributes: VNode['attributes'], element: Element) {
-        for (const name of Object.keys(attributes)) {
-            const value = attributes[name]
-            const eventHandlers = [
-                'onAbort',
-                'onAutoComplete',
-                'onAutoCompleteError',
-                'onBlur',
-                'onCancel',
-                'onCanPlay',
-                'onCanPlayThrough',
-                'onChange',
-                'onClick',
-                'onClose',
-                'onContextMenu',
-                'onCueChange',
-                'onDBLCLick',
-                'onDrag',
-                'onDragEnd',
-                'onDragEnter',
-                'onDragLeave',
-                'onDragOver',
-                'onDragStart',
-                'onDrop',
-                'onDurationChange',
-                'onEmptied',
-                'onEnded',
-                'onError',
-                'onFocus',
-                'onInput',
-                'onInvalid',
-                'onKeyDown',
-                'onKeyPress',
-                'onKeyUp',
-                'onLoad',
-                'onLoadedData',
-                'onLoadedMetadata',
-                'onLoadStart',
-                'onMouseDown',
-                'onMouseEnter',
-                'onMouseLeave',
-                'onMouseMove',
-                'onMouseOut',
-                'onMouseOver',
-                'onMouseUp',
-                'onMouseDown',
-                'onMouseEnter',
-                'onMouseLeave',
-                'onMouseMove',
-                'onMouseOut',
-                'onMouseOver',
-                'onMouseUp',
-                'onMouseWheel',
-                'onPause',
-                'onPlay',
-                'onPlaying',
-                'onProgress',
-                'onRateChange',
-                'onReset',
-                'onResize',
-                'onScroll',
-                'onSeeked',
-                'onSeeking',
-                'onSelect',
-                'onShow',
-                'onSort',
-                'onStalled',
-                'onSubmit',
-                'onSuspend',
-                'onTimeUpdate',
-                'onToggle',
-                'onVolumeChange',
-                'onWaiting'
-            ]
-            if (eventHandlers.includes(name)) {
-                element.addEventListener(name.replace(/^on/g, '').toLowerCase(), value)
-            }
-            else if (typeof value !== 'object') {
-                element.setAttribute(name, String(value))
-            }
-            else {
-                this.logger.verbose(`Unhandled attribute "${name}" on type "${element.tagName.toLowerCase()}"`)
-            }
-        }
     }
 }

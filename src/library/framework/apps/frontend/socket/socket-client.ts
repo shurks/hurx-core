@@ -15,7 +15,7 @@ export default class SocketClient {
      * Initialize the socket client
      */
     public static initialize() {
-        if (!(window as any).socket) {
+        if (!(VDOM.window as any).socket) {
             this.socket = new WebSocket('ws://localhost:3000')
             this.socket.addEventListener('open', (event) => {
                 console.log('Connected to web socket')
@@ -24,7 +24,7 @@ export default class SocketClient {
                 if (event.data === 'reload-script') {
                     document.querySelector('body >script[src^="bundle.min.js"]')?.remove()
                     const script = document.createElement('script')
-                    script.src = `bundle.min.js?time=${new Date().getTime()}`
+                    script.src = `bundle.min.js`
                     script.type = 'text/javascript'
                     script.defer = true
                     document.body.append(script)
@@ -33,7 +33,7 @@ export default class SocketClient {
             this.socket.addEventListener('close', (event) => {
                 console.log('Disconnected from web socket')
             });
-            (window as any).socket = this.socket
+            (VDOM.window as any).socket = this.socket
         }
     }
 

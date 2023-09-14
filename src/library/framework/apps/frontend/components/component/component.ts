@@ -2,7 +2,7 @@ import Logger from "../../../../../core/utils/logger/logger.esm"
 import Emitter from "../../../../../core/utils/reactive/emitter"
 import Listener from "../../../../../core/utils/reactive/listener"
 import VDOM from "../../vdom/vdom"
-import VNode from "../../vdom/vnode"
+import VNode, { VNodeOptions } from "../../vdom/vnode"
 import ComponentEmitters from "./emitters"
 
 /**
@@ -10,7 +10,7 @@ import ComponentEmitters from "./emitters"
  */
 export type ComponentProps = {
     /**
-     * The child nodes of this component
+     * The child nodes of this.component component
      */
     children?: Array<VNode>
 }
@@ -23,16 +23,31 @@ export type ComponentState = {}
 /**
  * A component in the front-end
  */
-export default abstract class Component<Props extends ComponentProps = ComponentProps, State extends ComponentState = {}> {
+export default abstract class Component<Props extends ComponentProps = ComponentProps, State extends ComponentState = {}> {    
     /**
      * The logger
      */
-    public readonly logger = new Logger()
+    private readonly logger = new Logger()
+
+    /**
+     * The component
+     */
+    private component = this
     
     /**
-     * The associated VNode of this component
+     * The associated VNode
      */
-    public vnode!: VNode
+    private _vnode!: VNode
+
+    /**
+     * Get/set the associated VNode of this component
+     */
+    private get vnode(): VNode {
+        return this.component._vnode
+    }
+    private set vnode(vnode: VNode) {
+        this.component._vnode = vnode
+    }
     
     /**
      * The component's event emitters, when extending this with your own emitters
@@ -61,8 +76,8 @@ export default abstract class Component<Props extends ComponentProps = Component
      * Event listeners that are there for every component
      */
     private _listeners: Listener<any>[] = [
-        this.emitters.umounted.listen.once(() => {
-            [...this._listeners, ...this.listeners].forEach((l) => l.unsubscribe())
+        this.component.emitters.umounted.listen.once(() => {
+            [...this.component._listeners, ...this.component.listeners].forEach((l) => l.unsubscribe())
         })
     ]
 
@@ -81,13 +96,13 @@ export default abstract class Component<Props extends ComponentProps = Component
      * automatically call this.rerender() upon any changes anywhere
      * within the state object with infinite depth.
      */
-    public get state(): typeof this._state {
-        return this._state
+    public get state(): typeof this.component._state {
+        return this.component._state
     }
-    public set state(state: typeof this._state) {
+    public set state(state: typeof this.component._state) {
         const deepProxy = (target: any, path: string[]) => new Proxy(target, {
             get: (obj, prop): any => {
-                this.logger.verbose('get', path)
+                this.component.logger.verbose('get', path)
                 // Intercept property access
                 const value = obj[prop]
                 if (typeof value === 'object' && value !== null) {
@@ -103,26 +118,26 @@ export default abstract class Component<Props extends ComponentProps = Component
             set: (obj: any, prop: any, newValue: any) => {
                 // Avoid calling rerender twice
                 if (obj[prop] === newValue) {
-                    this.logger.verbose(`set called without any changes`, path)
+                    this.component.logger.verbose(`set called without any changes`, path)
                     return true
                 }
-                this.logger.verbose('set', path)
+                this.component.logger.verbose('set', path)
                 obj[prop] = newValue
-                this.rerender() // Trigger re-render when a mutation occurs
+                this.component.rerender() // Trigger re-render when a mutation occurs
                 return true // Indicate success
             }
         })
         
         // Set the actual state
-        this._state = deepProxy(state, [])
+        this.component._state = deepProxy(state, [])
         
         // Initialize the state
-        if (!this._stateInitialized) {
-            this._stateInitialized = true
+        if (!this.component._stateInitialized) {
+            this.component._stateInitialized = true
         }
         else {
-            // Rerender on the 2nd time or above setting this.state
-            this.rerender()
+            // Rerender on the 2nd time or above setting this.component.state
+            this.component.rerender()
         }
     }
 
@@ -135,10 +150,10 @@ export default abstract class Component<Props extends ComponentProps = Component
      * Gets or sets the child nodes
      */
     public get children(): VNode[] {
-        return this.props.children || []
+        return this.component.props.children || []
     }
     public set children(value: VNode[]) {
-        this.props.children = value
+        this.component.props.children = value
     }
 
     constructor(props: Props) {
@@ -163,7 +178,118 @@ export default abstract class Component<Props extends ComponentProps = Component
     /**
      * Rerenders the entire component in the VDOM, then applies it to the changes to the DOM right after.
      */
-    public readonly rerender = () => {
-        VDOM.rerenderComponent(this.vnode)
+    public rerender() {
+        const vnode = this.vnode
+        if (!vnode.rootElement) {
+            this.logger.verbose({vnode})
+            throw new Error(`VNode has no root element.`)
+        }
+        if (vnode.element && !vnode.parent?.rootElement) {
+            this.logger.verbose({vnode})
+            throw new Error(`VNode has element but no parent with root element.`)
+        }
+        if (vnode.component) {
+            // Can't rerender an unrendered component
+            if (!vnode.renderNode) {
+                return
+            }
+
+            // Get the node indices
+            const indices = vnode.getRootElementIndices()
+            const min = indices[0]
+            const max = indices[indices.length - 1]
+            console.log({
+                indices,
+                min,
+                max,
+                root: vnode.rootElement,
+                el: vnode.element,
+                vnode
+            })
+
+            // Remove old nodes
+            const element = vnode.rootElement
+            for (let i = max; i >= min; i --) {
+                element.removeChild(element.childNodes[i])
+            }
+
+            // Rerender
+            vnode.renderNode = vnode.component?.render()
+            if (vnode.renderNode) {
+                vnode.renderNode.renderNodeParent = vnode
+
+                // Create the newly rendered elements
+                vnode.renderNode.createElements()
+                
+                // Get the elements of the renderNode
+                const getElements = (vnode: VNode, elements: Array<Element | Text> = []): Array<Element | Text> => {
+                    if (vnode.component) {
+                        if (vnode.renderNode) {
+                            getElements(vnode.renderNode, elements)
+                        }
+                        else if (vnode.renderNode === undefined) {
+                            this.logger.verbose({vnode})
+                            throw new Error(`VNode has a component, but no renderNode. Try calling \`this.createElements\` first.`)
+                        }
+                    }
+                    else if (vnode.isFragment) {
+                        for (const child of vnode.children) {
+                            getElements(child, elements)
+                        }
+                    }
+                    else if (vnode.element) {
+                        elements.push(vnode.element)
+                        if (!(vnode.element instanceof Text)) {
+                            const fillElement = (element: Element, vnode: VNode) => {
+                                if (vnode.component) {
+                                    if (vnode.renderNode) {
+                                        fillElement(element, vnode.renderNode)
+                                    }
+                                    else if (vnode.renderNode === undefined) {
+                                        this.logger.verbose({vnode})
+                                        throw new Error(`VNode of type component is not rendered`)
+                                    }
+                                }
+                                else if (vnode.isFragment) {
+                                    for (const child of vnode.children) {
+                                        fillElement(element, child)
+                                    }
+                                }
+                                else if (vnode.element) {
+                                    if (vnode.element instanceof Text) {
+                                        element.append(vnode.element)
+                                    }
+                                    else {
+                                        element.append(vnode.element)
+                                        for (const child of vnode.children) {
+                                            fillElement(vnode.element, child)
+                                        }
+                                    }
+                                }
+                            }
+                            for (const child of vnode.children) {
+                                fillElement(vnode.element, child)
+                            }
+                        }
+                        this.logger.verbose({el: vnode.element, children: vnode.children})
+                    }
+                    else {
+                        this.logger.verbose({vnode})
+                        throw new Error(`Invalid VNode.`)
+                    }
+                    return elements
+                }
+                const elements = getElements(vnode.renderNode)
+
+                // Insert the elements
+                for (let i = min; i < elements.length + min; i ++) {
+                    element.insertBefore(elements[i - min], element.childNodes[i])
+                }
+            }
+        }
+        else {
+            this.logger.verbose({vnode})
+            throw new Error(`The rerenderComponent function is only for components.`)
+        }
     }
 }
