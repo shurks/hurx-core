@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { Subject } from 'rxjs'
+import Emitter from './reactive/emitter'
 
 /**
  * The hurx file watcher
@@ -9,7 +9,7 @@ export default class Watcher {
     /**
      * The data
      */
-    private static data = {
+    private data = {
         watches: {} as Record<string, fs.FSWatcher>,
         fileWatches: {} as Record<string, fs.StatWatcher>,
         files: {} as Record<string, number|null>
@@ -18,22 +18,22 @@ export default class Watcher {
     /**
      * When a file got removed
      */
-    public static removed = new Subject<string>()
+    public removed = new Emitter<string>()
 
     /**
      * When a file got modified
      */
-    public static modified = new Subject<string>()
+    public modified = new Emitter<string>()
     
     /**
      * When a file got created
      */
-    public static created = new Subject<string>()
+    public created = new Emitter<string>()
 
     /**
      * Watch a directory recursively
      */
-    public static watch(_path: string) {
+    public watch(_path: string) {
         if (this.data.watches[_path]) {
             return
         }
@@ -73,15 +73,15 @@ export default class Watcher {
                 }
                 switch (action) {
                     case 'created': {
-                        this.created.next(filePath)
+                        this.created.emit(filePath)
                         break
                     }
                     case 'modified': {
-                        this.modified.next(filePath)
+                        this.modified.emit(filePath)
                         break
                     }
                     case 'removed': {
-                        this.removed.next(filePath)
+                        this.removed.emit(filePath)
                         break
                     }
                 }
@@ -93,13 +93,13 @@ export default class Watcher {
      * Watches a file
      * @param _file the file
      */
-    public static watchFile(_file: string) {
+    public watchFile(_file: string) {
         if (this.data.fileWatches[_file]) {
             return
         }
         this.data.fileWatches[_file] = fs.watchFile(_file, {}, async (curr, prev) => {
             if (curr.mtimeMs !== prev.mtimeMs) {
-                Watcher.modified.next(_file)
+                this.modified.emit(_file)
             }
         })
     }

@@ -1,4 +1,4 @@
-import JSON from "../../../../core/utils/json"
+import JSON from "../../../core/utils/json"
 import VDOM from "../vdom/vdom"
 import VNode from "../vdom/vnode"
 
@@ -21,14 +21,29 @@ export default class SocketClient {
                 console.log('Connected to web socket')
             })
             this.socket.addEventListener('message', (event) => {
-                if (event.data === 'reload-script') {
-                    document.querySelector('body >script[src^="bundle.min.js"]')?.remove()
-                    const script = document.createElement('script')
-                    script.src = `bundle.min.js`
-                    script.type = 'text/javascript'
-                    script.defer = true
-                    document.body.append(script)
-                }
+                setTimeout(() => {
+                    if (event.data === 'reload-script') {
+                        document.querySelector('body >script[src^="bundle.min.js"]')?.remove()
+                        const script = document.createElement('script')
+                        script.src = `bundle.min.js`
+                        script.type = 'text/javascript'
+                        script.defer = true
+                        document.body.append(script)
+                    }
+                    else if (event.data === 'reload-style') {
+                        for (let i = 0; i < VDOM.document.head.childNodes.length; i ++) {
+                            const node = VDOM.document.head.childNodes.item(i) as Element
+                            if (node.tagName === 'link' && !node.classList.contains('font')) {
+                                node.remove()
+                            }
+                        }
+                        const link = document.createElement('link')
+                        link.href = `bundle.min.css`
+                        link.rel = 'stylesheet'
+                        link.type = 'text/css'
+                        VDOM.document.head.appendChild(link)
+                    }
+                })
             })
             this.socket.addEventListener('close', (event) => {
                 console.log('Disconnected from web socket')

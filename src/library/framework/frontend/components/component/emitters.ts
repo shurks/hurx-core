@@ -1,4 +1,4 @@
-import Emitter from "../../../../../core/utils/reactive/emitter"
+import Emitter from "../../../../core/utils/reactive/emitter"
 import Component, { ComponentProps } from "./component"
 
 /**

@@ -1,4 +1,3 @@
-import Emitter from "../../../../../core/utils/reactive/emitter"
 import VDOM from "../../vdom/vdom"
 import Component, { ComponentProps } from "../component/component"
 

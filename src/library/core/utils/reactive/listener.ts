@@ -4,7 +4,7 @@ import Emitter from './emitter'
  * Represents a listener attached to an event.
  * @template Event - The type of the event argument.
  */
-export default class Listener<Event extends any> {
+export default class Listener<Event extends any = any> {
     /**
      * Creates a new listener instance.
      * @param {Emitter<Event>} event - The event this listener is attached to.

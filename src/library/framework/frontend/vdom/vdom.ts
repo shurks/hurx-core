@@ -1,12 +1,12 @@
-import { ArrayOrNonArray } from '../../../../core/types/types'
-import JSON from '../../../../core/utils/json'
-import Logger from '../../../../core/utils/logger/logger.esm'
+import { ArrayOrNonArray } from '../../../core/types/types'
+import JSON from '../../../core/utils/json'
+import Logger from '../../../core/utils/logger/logger.esm'
 import Component from '../components/component/component'
 import SocketClient from '../socket/socket-client'
 import VNode from './vnode'
 
 /**
- * The virtual DOM utility class
+ * The virtual DOM utility class, if using with node.js create global.window of type JSDOM.window.
  */
 export default class VDOM {
     /**
@@ -17,7 +17,7 @@ export default class VDOM {
     /**
      * The window (either a JSDOM instance in case of Node.JS otherwise the browsers window object)
      */
-    public static window = window || new (require('jsdom').JSDOM)().window
+    public static window = typeof global === 'undefined' ? window : global.window
     
     /**
      * The document in the window
@@ -272,19 +272,22 @@ export default class VDOM {
         
         // Update the VDOM
         if (previous) {
-            current.root.vdom = this
-            this.logger.verbose(`Updating DOM based on Hot Reload`)
-            current.root.createElements(previous.root)
-            const div = VDOM.document.createElement('div')
-            current.root.mount(div)
-            this.markNodesToBeUpdated(previous.root, current.root, previous, current)
-            if (!this.updateNodes(previous.root, current.root, previous, current)) {
-                this.logger.verbose({previous, current})
-                throw new Error(`Could not update nodes, updating DOM failed.`)
-            }
-            previous.root.setRootElement(previous.main)
-            current.root.setRootElement(previous.main)
-            current.root = previous.root;
+            // TODO: fix this!!
+            // current.root = previous.root
+            this.initializeDOM();
+            // current.root.vdom = this
+            // this.logger.verbose(`Updating DOM based on Hot Reload`)
+            // current.root.createElements(previous.root)
+            // const div = VDOM.document.createElement('div')
+            // current.root.mount(div)
+            // this.markNodesToBeUpdated(previous.root, current.root, previous, current)
+            // if (!this.updateNodes(previous.root, current.root, previous, current)) {
+            //     this.logger.verbose({previous, current})
+            //     throw new Error(`Could not update nodes, updating DOM failed.`)
+            // }
+            // previous.root.setRootElement(previous.main)
+            // current.root.setRootElement(previous.main)
+            // current.root = previous.root;
             ((VDOM.window as any).VDOMS) = vdoms.map((v) => v.main === this.main ? this : v)
         }
         

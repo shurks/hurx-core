@@ -1,5 +1,6 @@
 {
     "compilerOptions": {
+        "noImplicitAny": true,
         "emitDecoratorMetadata": true,
         "types": [
             "node"
@@ -20,8 +21,8 @@
         "experimentalDecorators": true,
         "typeRoots": [
             "./node_modules/@types",
-            "./src/library/engine/env",
-            "./src"
+            "./src",
+            "src/library/framework/frontend/jsx"
         ],
         "outDir": "./dist",
         "declaration": true,

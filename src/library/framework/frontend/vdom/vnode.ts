@@ -1,6 +1,7 @@
-import JSON from "../../../../core/utils/json"
-import Logger from "../../../../core/utils/logger/logger.esm"
-import Objects from "../../../../core/utils/objects"
+import { Hurx } from "../jsx/hurx"
+import JSON from "../../../core/utils/json"
+import Logger from "../../../core/utils/logger/logger.esm"
+import Objects from "../../../core/utils/objects"
 import Component from "../components/component/component"
 import VDOM from "./vdom"
 
@@ -31,7 +32,7 @@ export interface VNodeOptions {
     /**
      * The intrinsic attributes of the element.
      */
-    attributes: JSX.IntrinsicAttributes
+    attributes: Hurx.Attributes
 
     /**
      * The children VNodes of this VNode.
@@ -228,10 +229,11 @@ export default class VNode {
     /**
      * Get or set the intrinsic attributes of the element.
      */
-    public get attributes(): JSX.IntrinsicAttributes {
+    public get attributes(): Hurx.Attributes {
         return this.options.attributes
     }
-    public set attributes(attributes: JSX.IntrinsicAttributes) {
+    public set attributes(attributes: Hurx.Attributes) {
+        attributes.
         this.options.attributes = attributes
     }
 
@@ -524,7 +526,23 @@ export default class VNode {
                 this.element = this.text
             }
             else if (this.tag) {
-                this.element = VDOM.document.createElement(this.tag)
+                const checkSVG = (vnode: VNode): boolean => {
+                    if (!vnode) {
+                        return false
+                    }
+                    if (vnode.tag && vnode.tag.toLowerCase() === 'svg') {
+                        console.log(vnode)
+                        return true
+                    }
+                    if (vnode.parent) {
+                        return checkSVG(vnode.parent)
+                    }
+                    return false
+                }
+                const svg = this.tag.toLowerCase() === 'svg' || checkSVG(this)
+                this.element = svg
+                    ? VDOM.document.createElementNS("http://www.w3.org/2000/svg", this.tag)
+                    : VDOM.document.createElement(this.tag)
                 this.setAttributes()
                 for (let i = 0; i < this.children.length; i ++) {
                     this.children[i].createElements(originalNode?.children[i] || null)
@@ -606,7 +624,7 @@ export default class VNode {
         if (!appendToElement) {
             throw new Error(`No element found to mount the DOM in.`)
         }
-        if (!(appendToElement instanceof HTMLElement)) {
+        if (!(appendToElement instanceof Element)) {
             throw new Error(`Append to element is not of type HTMLElement.`)
         }
         if (this.component) {
@@ -664,10 +682,12 @@ export default class VNode {
             const value = this.attributes[name]
             const eventHandlers = [
                 'onAbort',
+                'onAfterPrint',
                 'onAutoComplete',
                 'onAutoCompleteError',
+                'onBeforePrint',
+                'onBeforeUnload',
                 'onBlur',
-                'onCancel',
                 'onCanPlay',
                 'onCanPlayThrough',
                 'onChange',
@@ -688,22 +708,18 @@ export default class VNode {
                 'onEnded',
                 'onError',
                 'onFocus',
+                'onHashChange',
                 'onInput',
                 'onInvalid',
                 'onKeyDown',
                 'onKeyPress',
                 'onKeyUp',
+                'onLanguageChange',
                 'onLoad',
                 'onLoadedData',
                 'onLoadedMetadata',
                 'onLoadStart',
-                'onMouseDown',
-                'onMouseEnter',
-                'onMouseLeave',
-                'onMouseMove',
-                'onMouseOut',
-                'onMouseOver',
-                'onMouseUp',
+                'onMessage',
                 'onMouseDown',
                 'onMouseEnter',
                 'onMouseLeave',
@@ -712,11 +728,15 @@ export default class VNode {
                 'onMouseOver',
                 'onMouseUp',
                 'onMouseWheel',
+                'onOffline',
+                'onOnline',
                 'onPause',
                 'onPlay',
                 'onPlaying',
+                'onPopState',
                 'onProgress',
                 'onRateChange',
+                'onRedo',
                 'onReset',
                 'onResize',
                 'onScroll',
@@ -726,12 +746,15 @@ export default class VNode {
                 'onShow',
                 'onSort',
                 'onStalled',
+                'onStorage',
                 'onSubmit',
                 'onSuspend',
                 'onTimeUpdate',
                 'onToggle',
+                'onUndo',
+                'onUnload',
                 'onVolumeChange',
-                'onWaiting'
+                'onWaiting',
             ]
             if (eventHandlers.includes(name)) {
                 const eventListener = {

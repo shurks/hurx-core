@@ -1,8 +1,7 @@
-import Logger from "../../../../../core/utils/logger/logger.esm"
-import Emitter from "../../../../../core/utils/reactive/emitter"
-import Listener from "../../../../../core/utils/reactive/listener"
-import VDOM from "../../vdom/vdom"
-import VNode, { VNodeOptions } from "../../vdom/vnode"
+import Logger from "../../../../core/utils/logger/logger.esm"
+import Emitter from "../../../../core/utils/reactive/emitter"
+import Listener from "../../../../core/utils/reactive/listener"
+import VNode from "../../vdom/vnode"
 import ComponentEmitters from "./emitters"
 
 /**
@@ -23,7 +22,7 @@ export type ComponentState = {}
 /**
  * A component in the front-end
  */
-export default abstract class Component<Props extends ComponentProps = ComponentProps, State extends ComponentState = {}> {    
+export default abstract class Component<Props extends ComponentProps = any, State extends ComponentState = any> {    
     /**
      * The logger
      */

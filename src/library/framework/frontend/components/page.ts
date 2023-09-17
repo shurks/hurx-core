@@ -1,5 +1,4 @@
 import Component from "./component/component"
-import VNode from "../vdom/vnode"
 
 /**
  * A component used as the page for a route
